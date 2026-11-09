@@ -14,7 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
     env:
-      STAGING_URL: ${{ vars.STAGING_URL }}
+      # Змінна репозиторію STAGING_URL має пріоритет; інакше — стейдж із render.yaml.
+      STAGING_URL: ${{ vars.STAGING_URL || 'https://cbt-journal-staging.onrender.com' }}
       COMMIT: ${{ github.event.workflow_run.head_sha }}
     steps:
       - uses: actions/checkout@v4
