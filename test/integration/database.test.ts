@@ -202,6 +202,35 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
       }
     });
 
+    it('a note that wins the race is never timestamped after the deletion (deterministic)', async () => {
+      // Третя транзакція тримає FOR SHARE: видалення чекає на неї, а нотатка (сумісна
+      // з FOR SHARE) за цей час проходить. Час видалення мусить бути пізнішим за нотатку.
+      const holder = await pool.connect();
+      try {
+        await holder.query('BEGIN');
+        await holder.query('SELECT id FROM entries WHERE id = $1 FOR SHARE', [
+          SEED_IDS.entryIryna2,
+        ]);
+        const pendingDelete = new PgEntryRepository(pool).softDelete(SEED_IDS.entryIryna2);
+        await new Promise((r) => setTimeout(r, 150));
+        const created = await notes().createIfEntryActive({
+          ...note,
+          entryId: SEED_IDS.entryIryna2,
+        });
+        await holder.query('COMMIT');
+        expect(await pendingDelete).toBe(true);
+        expect(created).not.toBeNull();
+        const { rows } = await pool.query<{ ok: boolean }>(
+          `SELECT n.created_at <= e.deleted_at AS ok FROM therapist_notes n
+           JOIN entries e ON e.id = n.entry_id WHERE n.id = $1`,
+          [created?.id],
+        );
+        expect(rows[0]?.ok).toBe(true);
+      } finally {
+        holder.release();
+      }
+    });
+
     it('many parallel note/delete pairs: no note is timestamped after its entry deletion', async () => {
       const ids: string[] = [];
       for (let i = 0; i < 30; i++) {

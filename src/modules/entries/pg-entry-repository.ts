@@ -73,13 +73,16 @@ export class PgEntryRepository implements EntryRepository {
   }
 
   /**
-   * clock_timestamp(), а не now(): now() — час початку запиту, а видалення могло
-   * чекати на паралельну нотатку (FOR SHARE). Тоді deleted_at був би раніше за
-   * created_at нотатки, хоча нотатку створено першою (spec §4, послідовний порядок).
+   * Час видалення має бути пізнішим за будь-яку нотатку, що встигла раніше (spec §4,
+   * послідовний порядок). Тому спершу блокуємо рядок (FOR UPDATE у підзапиті — чекає,
+   * поки паралельна нотатка з FOR SHARE завершиться), і лише потім беремо
+   * clock_timestamp(). У простому UPDATE ... SET clock_timestamp() час обчислюється
+   * ще до очікування блокування, і нотатка могла виявитися «пізнішою» за видалення.
    */
   async softDelete(id: string): Promise<boolean> {
     const result = await this.pool.query(
-      'UPDATE entries SET deleted_at = clock_timestamp() WHERE id = $1 AND deleted_at IS NULL',
+      `UPDATE entries SET deleted_at = clock_timestamp()
+       WHERE id = (SELECT id FROM entries WHERE id = $1 AND deleted_at IS NULL FOR UPDATE)`,
       [id],
     );
     return result.rowCount === 1;

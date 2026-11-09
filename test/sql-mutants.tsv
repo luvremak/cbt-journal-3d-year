@@ -9,7 +9,7 @@ src/modules/entries/pg-entry-repository.ts	LIMIT $2 OFFSET $3	LIMIT $2 OFFSET 0*
 src/modules/entries/pg-entry-repository.ts	: 'AND deleted_at IS NULL'	: ''
 src/modules/entries/pg-entry-repository.ts	ORDER BY page.created_at DESC, page.id DESC	ORDER BY page.created_at ASC, page.id DESC
 src/modules/entries/pg-entry-repository.ts	JOIN entries e ON e.id = page.id	JOIN entries e ON TRUE
-src/modules/entries/pg-entry-repository.ts	WHERE id = $1 AND deleted_at IS NULL'	WHERE id = $1'
+src/modules/entries/pg-entry-repository.ts	WHERE id = $1 AND deleted_at IS NULL FOR UPDATE	WHERE id = $1 FOR UPDATE
 src/modules/notes/pg-note-repository.ts	AND deleted_at IS NULL FOR SHARE	FOR SHARE
 src/modules/notes/pg-note-repository.ts	AND deleted_at IS NULL FOR SHARE	AND deleted_at IS NULL
 src/modules/notes/pg-note-repository.ts	WHERE entry_id = $1 AND therapist_id = $2	WHERE entry_id = $1 AND $2::uuid IS NOT NULL
