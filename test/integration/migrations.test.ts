@@ -10,6 +10,7 @@ import {
   DEFAULT_MIGRATIONS_DIR,
   migrate,
   MigrationChecksumError,
+  MigrationLockTimeoutError,
   NO_TRANSACTION_MARKER,
 } from '../../src/db/migrate.js';
 import { createPool, type Pool } from '../../src/db/pool.js';
@@ -57,11 +58,15 @@ describe.skipIf(!hasDb)('migration runner (zero-downtime mechanics)', () => {
   it('applies the real migrations once; a second run applies nothing', async () => {
     const pool = await isolatedPool();
     const logs: string[] = [];
-    expect(await migrate(pool, { log: (m) => logs.push(m) })).toEqual([
+    const all = [
       '001_init.sql',
       '002_uk_collation.sql',
-    ]);
-    expect(logs).toEqual(['applied 001_init.sql', 'applied 002_uk_collation.sql']);
+      '003_entries_active_page_idx.sql',
+      '004_entries_page_idx.sql',
+      '005_drop_entries_client_created_idx.sql',
+    ];
+    expect(await migrate(pool, { log: (m) => logs.push(m) })).toEqual(all);
+    expect(logs).toEqual(all.map((f) => `applied ${f}`));
     expect(await migrate(pool)).toEqual([]);
     expect(await tables(pool)).toEqual([
       'entries',
@@ -75,9 +80,9 @@ describe.skipIf(!hasDb)('migration runner (zero-downtime mechanics)', () => {
   it('two instances starting at once: advisory lock serialises them, no errors', async () => {
     const pool = await isolatedPool();
     const [a, b] = await Promise.all([migrate(pool), migrate(pool)]);
-    expect([...a, ...b].sort()).toEqual(['001_init.sql', '002_uk_collation.sql']);
+    expect([...a, ...b].sort()).toHaveLength(5);
     const { rows } = await pool.query<{ n: string }>('SELECT count(*) AS n FROM schema_migrations');
-    expect(Number(rows[0]?.n)).toBe(2);
+    expect(Number(rows[0]?.n)).toBe(5);
   });
 
   it('a failing migration is rolled back completely and stops the run', async () => {
@@ -158,6 +163,37 @@ describe.skipIf(!hasDb)('migration runner (zero-downtime mechanics)', () => {
     await expect(migrate(pool, { dir })).rejects.toThrow(/no_such_function/);
     const { rows } = await pool.query<{ n: string }>('SELECT count(*) AS n FROM schema_migrations');
     expect(Number(rows[0]?.n)).toBe(0);
+  });
+
+  it('two instances with CREATE INDEX CONCURRENTLY do not deadlock', async () => {
+    const pool = await isolatedPool();
+    const dir = dirWith({
+      '001_t.sql': 'CREATE TABLE t (id int);',
+      '002_idx.sql': `${NO_TRANSACTION_MARKER}\nCREATE INDEX CONCURRENTLY IF NOT EXISTS t_idx ON t (id);`,
+      '003_idx2.sql': `${NO_TRANSACTION_MARKER}\nCREATE INDEX CONCURRENTLY IF NOT EXISTS t_idx2 ON t (id);`,
+    });
+    const [a, b] = await Promise.all([
+      migrate(pool, { dir, lockPollMs: 20 }),
+      migrate(pool, { dir, lockPollMs: 20 }),
+    ]);
+    expect([...a, ...b].sort()).toEqual(['001_t.sql', '002_idx.sql', '003_idx2.sql']);
+  });
+
+  it('gives up waiting for another migrator after lockWaitMs', async () => {
+    const pool = await isolatedPool();
+    const holder = await pool.connect();
+    try {
+      await holder.query(`SELECT pg_advisory_lock(hashtext('cbt-journal:migrations'))`);
+      const started = Date.now();
+      await expect(
+        migrate(pool, { dir: dirWith({}), lockWaitMs: 300, lockPollMs: 50 }),
+      ).rejects.toThrow(new MigrationLockTimeoutError(300));
+      expect(Date.now() - started).toBeGreaterThanOrEqual(300);
+      expect(new MigrationLockTimeoutError(1).name).toBe('MigrationLockTimeoutError');
+    } finally {
+      await holder.query(`SELECT pg_advisory_unlock(hashtext('cbt-journal:migrations'))`);
+      holder.release();
+    }
   });
 
   it('releases the advisory lock even when a migration fails', async () => {

@@ -90,6 +90,8 @@ describe('loadConfig', () => {
       STORAGE: 'memory',
       APP_ENV: 'local',
       GIT_COMMIT: 'unknown',
+      USER_CACHE_TTL_MS: 60_000,
+      USER_CACHE_MAX: 10_000,
     });
   });
 
@@ -103,6 +105,8 @@ describe('loadConfig', () => {
       DATABASE_URL: 'pg://x',
       APP_ENV: 'local',
       GIT_COMMIT: 'unknown',
+      USER_CACHE_TTL_MS: 60_000,
+      USER_CACHE_MAX: 10_000,
     });
   });
 
@@ -137,6 +141,16 @@ describe('loadConfig', () => {
   it('requires DATABASE_URL for postgres', () => {
     expect(() => loadConfig({ STORAGE: 'postgres' })).toThrow(/DATABASE_URL is required/);
     expect(() => loadConfig({ STORAGE: 'postgres', DATABASE_URL: '' })).toThrow();
+  });
+
+  it('user cache settings', () => {
+    expect(loadConfig({ USER_CACHE_TTL_MS: '0', USER_CACHE_MAX: '5' })).toMatchObject({
+      USER_CACHE_TTL_MS: 0,
+      USER_CACHE_MAX: 5,
+    });
+    expect(() => loadConfig({ USER_CACHE_TTL_MS: '-1' })).toThrow();
+    expect(() => loadConfig({ USER_CACHE_TTL_MS: '1.5' })).toThrow();
+    expect(() => loadConfig({ USER_CACHE_MAX: '0' })).toThrow();
   });
 
   it.each([{ PORT: '0' }, { PORT: 'x' }, { LOG_LEVEL: 'loud' }, { STORAGE: 'redis' }])(

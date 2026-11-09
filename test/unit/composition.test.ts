@@ -2,6 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { loadConfig } from '../../src/config.js';
+import type { Pool } from '../../src/db/pool.js';
 import { buildContainer } from '../../src/container.js';
 import { parseBody } from '../../src/http/validate.js';
 import { ValidationError } from '../../src/lib/errors.js';
@@ -12,6 +13,7 @@ import { InMemoryNoteRepository } from '../../src/modules/notes/in-memory-note-r
 import { NoteService } from '../../src/modules/notes/note-service.js';
 import { PgNoteRepository } from '../../src/modules/notes/pg-note-repository.js';
 import { InMemoryUserRepository } from '../../src/modules/users/in-memory-user-repository.js';
+import { CachingUserRepository } from '../../src/modules/users/caching-user-repository.js';
 import { PgUserRepository } from '../../src/modules/users/pg-user-repository.js';
 import { UserService } from '../../src/modules/users/user-service.js';
 import { SEED_IDS } from '../../src/seed-data.js';
@@ -55,6 +57,56 @@ describe('buildContainer', () => {
     expect(note).toBeNull();
   });
 
+  it('postgres: user cache gets TTL and size from config', async () => {
+    let queries = 0;
+    let now = 0;
+    const realNow = Date.now;
+    Date.now = () => now;
+    try {
+      const c = buildContainer(
+        loadConfig({
+          STORAGE: 'postgres',
+          DATABASE_URL: 'postgres://u:p@127.0.0.1:1/x',
+          USER_CACHE_TTL_MS: '1000',
+          USER_CACHE_MAX: '1',
+        }),
+      );
+      // Підміняємо пул до першого resolve: рахуємо звернення до «БД».
+      c.registerValue(TOKENS.pool, {
+        query: async (_sql: string, params: string[]) => {
+          queries++;
+          return {
+            rows: [{ id: params[0], role: 'client', name: 'x', contacts: 'x', therapist_id: 't' }],
+          };
+        },
+      } as unknown as Pool);
+      const users = c.resolve(TOKENS.userRepository);
+      await users.findById(SEED_IDS.clientIryna);
+      await users.findById(SEED_IDS.clientIryna);
+      expect(queries).toBe(1); // кеш працює
+      now = 1000;
+      await users.findById(SEED_IDS.clientIryna);
+      expect(queries).toBe(2); // TTL = 1000 мс
+      await users.findById(SEED_IDS.clientMaksym); // max = 1 → Ірину витіснено
+      await users.findById(SEED_IDS.clientIryna);
+      expect(queries).toBe(4);
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
+  it('postgres with USER_CACHE_TTL_MS=0: plain Pg user repository', async () => {
+    const c = buildContainer(
+      loadConfig({
+        STORAGE: 'postgres',
+        DATABASE_URL: 'postgres://u:p@127.0.0.1:1/x',
+        USER_CACHE_TTL_MS: '0',
+      }),
+    );
+    expect(c.resolve(TOKENS.userRepository)).toBeInstanceOf(PgUserRepository);
+    await c.dispose();
+  });
+
   it('postgres without DATABASE_URL (config built by hand) fails fast', () => {
     expect(() =>
       buildContainer({
@@ -63,6 +115,8 @@ describe('buildContainer', () => {
         STORAGE: 'postgres',
         APP_ENV: 'test',
         GIT_COMMIT: 'x',
+        USER_CACHE_TTL_MS: 0,
+        USER_CACHE_MAX: 1,
       }),
     ).toThrow('DATABASE_URL is required when STORAGE=postgres');
   });
@@ -79,7 +133,8 @@ describe('buildContainer', () => {
     };
     try {
       expect(pool.options.connectionString).toBe(url);
-      expect(c.resolve(TOKENS.userRepository)).toBeInstanceOf(PgUserRepository);
+      // За замовчуванням Pg-репозиторій обгорнуто кешем (perf).
+      expect(c.resolve(TOKENS.userRepository)).toBeInstanceOf(CachingUserRepository);
       expect(c.resolve(TOKENS.entryRepository)).toBeInstanceOf(PgEntryRepository);
       expect(c.resolve(TOKENS.noteRepository)).toBeInstanceOf(PgNoteRepository);
       expect(pool.totalCount).toBe(0);

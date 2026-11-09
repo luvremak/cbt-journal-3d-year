@@ -5,7 +5,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../src/db/migrate.js';
 import type { Pool } from '../../src/db/pool.js';
 import { findClientsWithInvalidTherapist, seed } from '../../src/db/seed.js';
-import { PgEntryRepository } from '../../src/modules/entries/pg-entry-repository.js';
+import {
+  DEFERRED_JOIN_MIN_OFFSET,
+  PgEntryRepository,
+} from '../../src/modules/entries/pg-entry-repository.js';
 import { PgNoteRepository } from '../../src/modules/notes/pg-note-repository.js';
 import { SEED_IDS, SEED_USERS } from '../../src/seed-data.js';
 import { createTestPool, hasDb, resetDb } from '../helpers/db.js';
@@ -58,11 +61,42 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
     });
   });
 
+  describe('pagination with equal created_at (spec §4: ties ordered by id)', () => {
+    it('plain and deferred-join pages follow id DESC within the same timestamp', async () => {
+      const repo = new PgEntryRepository(pool);
+      await pool.query(
+        `INSERT INTO entries (client_id, situation, thought, emotion, emotion_intensity, created_at)
+         SELECT $1, 's', 't', 'e', 1, '2026-01-01T00:00:00Z' FROM generate_series(1, 300)`,
+        [SEED_IDS.clientMaksym],
+      );
+      const { rows } = await pool.query<{ id: string }>(
+        `SELECT id FROM entries WHERE client_id = $1 ORDER BY id DESC`,
+        [SEED_IDS.clientMaksym],
+      );
+      const expected = rows.map((r) => r.id);
+      for (const offset of [0, 150, DEFERRED_JOIN_MIN_OFFSET, 240]) {
+        for (const includeDeleted of [false, true]) {
+          const page = await repo.findByClient(SEED_IDS.clientMaksym, {
+            includeDeleted,
+            page: { limit: 30, offset },
+          });
+          expect(page.map((e) => e.id)).toEqual(expected.slice(offset, offset + 30));
+        }
+      }
+    });
+  });
+
   describe('migrations', () => {
     it('re-running applies nothing', async () => {
       expect(await migrate(pool)).toEqual([]);
       const { rows } = await pool.query<{ name: string }>('SELECT name FROM schema_migrations');
-      expect(rows.map((r) => r.name).sort()).toEqual(['001_init.sql', '002_uk_collation.sql']);
+      expect(rows.map((r) => r.name).sort()).toEqual([
+        '001_init.sql',
+        '002_uk_collation.sql',
+        '003_entries_active_page_idx.sql',
+        '004_entries_page_idx.sql',
+        '005_drop_entries_client_created_idx.sql',
+      ]);
     });
   });
 

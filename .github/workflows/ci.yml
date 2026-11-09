@@ -126,10 +126,34 @@ jobs:
         working-directory: new
       - run: new/scripts/compat-check.sh old new
 
+  perf:
+    name: Performance budget (p99)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: cbt, POSTGRES_PASSWORD: cbt, POSTGRES_DB: cbt_perf }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cbt" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PERF_DATABASE_URL: postgres://cbt:cbt@localhost:5432/cbt_perf
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci && npm run build
+      - run: npm run perf:prepare
+      # Бюджет — з spec (нефункціональні вимоги); див. perf/README.md.
+      - run: npm run perf -- --duration 5 --repeat 3 --budget-p99 50
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: perf-results, path: reports/perf.json }
+
   report:
     name: Quality report
     runs-on: ubuntu-latest
-    needs: [test, mutation, sql-mutation]
+    needs: [test, mutation, sql-mutation, perf]
     if: always()
     steps:
       - uses: actions/checkout@v4
@@ -146,6 +170,7 @@ jobs:
           cp artifacts/mutation-results/mutation/mutation.json reports/mutation/ 2>/dev/null || true
           cp artifacts/mutation-results/mutation-di.json reports/ 2>/dev/null || true
           cp artifacts/sql-mutation-results/sql-mutation.json reports/ 2>/dev/null || true
+          cp artifacts/perf-results/perf.json reports/ 2>/dev/null || true
       - run: npm run report
       - uses: actions/upload-artifact@v4
         with: { name: quality-report, path: reports/index.html }

@@ -78,7 +78,7 @@ describe.each(storages)('API e2e [%s]', (storage) => {
         environment: 'local',
         storage,
         started_at: expect.any(String),
-        migration: storage === 'postgres' ? '002_uk_collation.sql' : null,
+        migration: storage === 'postgres' ? '005_drop_entries_client_created_idx.sql' : null,
       });
     });
 
