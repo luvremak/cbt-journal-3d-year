@@ -8,7 +8,18 @@
     "noImplicitOverride": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@cbt-journal/di": ["./packages/di/src/index.ts"]
+    }
   },
-  "include": ["src", "test", "vitest.config.ts", "vitest.nodb.config.ts"]
+  "include": [
+    "src",
+    "test",
+    "packages/*/src",
+    "packages/*/test",
+    "vitest.config.ts",
+    "vitest.nodb.config.ts",
+    "packages/*/vitest.config.ts"
+  ]
 }

@@ -76,7 +76,7 @@ curl -H 'X-User-Id: aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' localhost:3000/client/
 routes → services → repositories → PostgreSQL / пам'ять
 ```
 
-- **DI:** власний контейнер `src/lib/di/container.ts`; усі залежності збираються в `src/container.ts` (composition root). Режим `STORAGE` лише підміняє реалізації репозиторіїв.
+- **DI:** бібліотека [`@cbt-journal/di`](packages/di/README.md) (окремий пакет у `packages/di`, npm workspaces); усі залежності збираються в `src/container.ts` (composition root). Режим `STORAGE` лише підміняє реалізації репозиторіїв, а `container.dispose()` закриває пул з'єднань при зупинці.
 - **Бізнес-процес:** кожен запит отримує `bpId` (або бере з заголовка `X-Business-Process-Id`). Він є в кожному рядку логу (pino + AsyncLocalStorage) і повертається в заголовку відповіді та в тілі помилок.
 - **Помилки:** сервіси кидають доменні помилки (`src/lib/errors.ts`), глобальний обробник перетворює їх на HTTP-коди за spec.
 - **Міграції:** `migrations/*.sql`, застосовуються `npm run db:migrate` і запам'ятовуються в `schema_migrations`.
@@ -133,6 +133,7 @@ make report         # усе разом → reports/index.html
 
 ```
 src/          код застосунку
+packages/di/  бібліотека DI @cbt-journal/di (свої тести, Stryker, README, CHANGELOG)
 migrations/   SQL-міграції
 standards/    правила розробки (код, git, тести, міграції)
 test/         unit/, integration/, e2e/, helpers/

@@ -2,7 +2,7 @@ import type { Express } from 'express';
 import { loadConfig } from '../../src/config.js';
 import { buildContainer } from '../../src/container.js';
 import { createApp } from '../../src/http/app.js';
-import type { Container } from '../../src/lib/di/container.js';
+import type { Container } from '@cbt-journal/di';
 import { TOKENS } from '../../src/tokens.js';
 import { TEST_DATABASE_URL } from './db.js';
 import { captureLogger } from './fakes.js';
@@ -41,7 +41,7 @@ export function createTestApp(
     container,
     logs,
     async close() {
-      if (container.has(TOKENS.pool)) await container.resolve(TOKENS.pool).end();
+      await container.dispose();
     },
   };
 }

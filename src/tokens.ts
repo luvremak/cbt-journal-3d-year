@@ -1,6 +1,6 @@
 import type { Config } from './config.js';
 import type { Pool } from './db/pool.js';
-import { createToken } from './lib/di/container.js';
+import { createToken } from '@cbt-journal/di';
 import type { Logger } from './lib/logger.js';
 import type { EntryRepository } from './modules/entries/entry.js';
 import type { SystemService } from './modules/system/system-service.js';

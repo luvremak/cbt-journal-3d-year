@@ -8,7 +8,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "npm run build -w @cbt-journal/di && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -31,7 +31,9 @@
     "report": "node scripts/quality-report.mjs",
     "start:prod": "node dist/db/migrate.js && node dist/index.js",
     "smoke": "node scripts/smoke.mjs",
-    "start:staging": "node dist/db/migrate.js && node dist/db/seed.js && node dist/index.js"
+    "start:staging": "node dist/db/migrate.js && node dist/db/seed.js && node dist/index.js",
+    "test:di": "npm test -w @cbt-journal/di",
+    "mutation:di": "npm run mutation -w @cbt-journal/di"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged && npm run typecheck && npm run test:unit",
@@ -71,9 +73,13 @@
     "vitest": "^5.1.0"
   },
   "dependencies": {
+    "@cbt-journal/di": "1.0.0",
     "express": "^5.3.0",
     "pg": "^8.23.1",
     "pino": "^10.4.0",
     "zod": "^4.6.7"
-  }
+  },
+  "workspaces": [
+    "packages/*"
+  ]
 }

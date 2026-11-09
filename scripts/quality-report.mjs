@@ -21,7 +21,22 @@ const readJson = (p) => (existsSync(at(p)) ? JSON.parse(readFileSync(at(p), 'utf
 
 const tests = readJson('reports/tests.json');
 const coverage = readJson('reports/coverage/coverage-summary.json');
-const mutation = readJson('reports/mutation/mutation.json');
+const mutationApp = readJson('reports/mutation/mutation.json');
+const mutationDi = readJson('reports/mutation-di.json');
+/** Застосунок і бібліотека DI — один набір файлів (шляхи бібліотеки з префіксом пакета). */
+const mutation = mergeMutation(mutationApp, mutationDi, 'packages/di/');
+
+function mergeMutation(app, lib, prefix) {
+  if (!lib) return app;
+  const prefixed = (obj) =>
+    Object.fromEntries(Object.entries(obj ?? {}).map(([k, v]) => [`${prefix}${k}`, v]));
+  if (!app) return { ...lib, files: prefixed(lib.files), testFiles: prefixed(lib.testFiles) };
+  return {
+    ...app,
+    files: { ...app.files, ...prefixed(lib.files) },
+    testFiles: { ...app.testFiles, ...prefixed(lib.testFiles) },
+  };
+}
 const sql = readJson('reports/sql-mutation.json');
 
 // ---------- helpers ----------
@@ -77,9 +92,10 @@ const fonts = [
 // ---------- tests ----------
 
 const LEVELS = [
-  ['unit', 'Unit', 'Логіка сервісів, валідація, DI — без бази'],
-  ['integration', 'Інтеграційні', 'Репозиторії, обмеження й атомарність на PostgreSQL'],
-  ['e2e', 'E2E', 'Сценарії spec через HTTP, обидва сховища'],
+  ['test/unit/', 'Unit', 'Логіка сервісів, валідація, конфіг — без бази'],
+  ['test/integration/', 'Інтеграційні', 'Репозиторії, міграції, атомарність на PostgreSQL'],
+  ['test/e2e/', 'E2E', 'Сценарії spec через HTTP, обидва сховища'],
+  ['packages/', 'Бібліотека DI', 'Пакет @cbt-journal/di окремо від застосунку'],
 ];
 
 function summarizeTests() {
@@ -91,7 +107,7 @@ function summarizeTests() {
   let specLinked = 0;
   for (const file of tests.testResults) {
     const rel = relative(root, file.name);
-    const level = LEVELS.find(([k]) => rel.startsWith(`test/${k}/`))?.[0];
+    const level = LEVELS.find(([k]) => rel.startsWith(k))?.[0];
     for (const t of file.assertionResults) {
       if (/spec §/.test(t.fullName)) specLinked++;
       if (!level) continue;
@@ -414,6 +430,7 @@ function sqlSection(s) {
 // ---------- page ----------
 
 const t = summarizeTests();
+
 const m = summarizeMutation();
 const commit = git('rev-parse --short HEAD');
 const branch = git('rev-parse --abbrev-ref HEAD');
@@ -492,7 +509,7 @@ h3{font-weight:500; font-size:1.05rem; margin:0}
 .tofix p{max-width:68ch; color:var(--muted)}
 .tofix .path{font-family:var(--mono); font-size:.85rem; font-weight:400; margin:26px 0 8px; color:var(--paper)}
 .tofix.calm h2{color:var(--sage)}
-.levels{display:grid; grid-template-columns:repeat(3,1fr); border-top:1px solid var(--hair); border-bottom:1px solid var(--hair)}
+.levels{display:grid; grid-template-columns:repeat(${LEVELS.length},1fr); border-top:1px solid var(--hair); border-bottom:1px solid var(--hair)}
 .level{padding:22px 24px 20px 0}
 .level + .level{padding-left:24px; border-left:1px solid var(--hair)}
 .level .big{margin:6px 0 2px; font-size:2.6rem; line-height:1.1}

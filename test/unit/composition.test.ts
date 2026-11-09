@@ -71,6 +71,12 @@ describe('buildContainer', () => {
     const url = 'postgres://u:p@127.0.0.1:1/never';
     const c = buildContainer(loadConfig({ STORAGE: 'postgres', DATABASE_URL: url }));
     const pool = c.resolve(TOKENS.pool);
+    let ended = false;
+    const originalEnd = pool.end.bind(pool);
+    pool.end = async () => {
+      ended = true;
+      return originalEnd();
+    };
     try {
       expect(pool.options.connectionString).toBe(url);
       expect(c.resolve(TOKENS.userRepository)).toBeInstanceOf(PgUserRepository);
@@ -79,8 +85,9 @@ describe('buildContainer', () => {
       expect(pool.totalCount).toBe(0);
       expect((await c.resolve(TOKENS.systemService).version()).storage).toBe('postgres');
     } finally {
-      await pool.end();
+      await c.dispose();
     }
+    expect(ended).toBe(true); // пул закриває container.dispose()
   });
 });
 
