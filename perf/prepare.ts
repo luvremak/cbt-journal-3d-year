@@ -11,16 +11,7 @@ import pg from 'pg';
 import { migrate } from '../src/db/migrate.js';
 import { createPool } from '../src/db/pool.js';
 import { seed } from '../src/db/seed.js';
-import { SEED_IDS } from '../src/seed-data.js';
-
-export const PERF = {
-  therapists: 20,
-  clientsPerTherapist: 25,
-  entriesPerClient: 200,
-  heavyClientEntries: 2000,
-  heavyClient: SEED_IDS.clientMaksym,
-  therapist: SEED_IDS.therapistOlena,
-};
+import { PERF } from './config.js';
 
 async function ensureDatabase(url: string): Promise<void> {
   const dbName = new URL(url).pathname.slice(1);

@@ -11,7 +11,7 @@ import { spawn } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import autocannon from 'autocannon';
 import pg from 'pg';
-import { PERF } from './prepare.js';
+import { PERF } from './config.js';
 
 const args = process.argv.slice(2);
 const opt = (name: string, def: string) => {
