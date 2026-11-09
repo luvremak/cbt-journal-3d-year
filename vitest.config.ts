@@ -19,6 +19,9 @@ export default defineConfig({
     env: { LOG_LEVEL: 'silent', TEST_DATABASE_URL },
     coverage: {
       provider: 'v8',
+      // Підсумок для звіту якості (scripts/quality-report.mjs) і текст у консоль.
+      reporter: ['text-summary', 'json-summary'],
+      reportsDirectory: 'reports/coverage',
       include: ['src/**/*.ts'],
       exclude: ['src/index.ts'],
     },
