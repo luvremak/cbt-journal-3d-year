@@ -12,7 +12,7 @@ export class InMemoryNoteRepository implements NoteRepository {
 
   constructor(
     private readonly entries: ActiveEntryChecker,
-    seed: readonly Note[] = [],
+    seed: readonly Note[],
   ) {
     this.notes = seed.map(clone);
   }

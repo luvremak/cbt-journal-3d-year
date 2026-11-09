@@ -1,4 +1,6 @@
+import { Writable } from 'node:stream';
 import { pino } from 'pino';
+import { createLogger } from '../../src/lib/logger.js';
 import { InMemoryEntryRepository } from '../../src/modules/entries/in-memory-entry-repository.js';
 import { EntryService } from '../../src/modules/entries/entry-service.js';
 import { InMemoryNoteRepository } from '../../src/modules/notes/in-memory-note-repository.js';
@@ -9,6 +11,22 @@ import { UserService } from '../../src/modules/users/user-service.js';
 import { SEED_ENTRIES, SEED_IDS, SEED_NOTES, SEED_USERS } from '../../src/seed-data.js';
 
 export const silentLogger = pino({ level: 'silent' });
+
+export type LogLine = Record<string, unknown>;
+
+/** Справжній логер застосунку (createLogger), що пише рядки JSON у масив. */
+export function captureLogger(level = 'debug') {
+  const logs: LogLine[] = [];
+  const sink = new Writable({
+    write(chunk: Buffer, _enc, cb) {
+      for (const line of chunk.toString().split('\n').filter(Boolean)) {
+        logs.push(JSON.parse(line) as LogLine);
+      }
+      cb();
+    },
+  });
+  return { logger: createLogger(level, sink), logs };
+}
 
 export function seedUser(id: string): User {
   const user = SEED_USERS.find((u) => u.id === id);
@@ -27,10 +45,11 @@ export function createServices() {
   const userRepo = new InMemoryUserRepository(SEED_USERS);
   const entryRepo = new InMemoryEntryRepository(SEED_ENTRIES);
   const noteRepo = new InMemoryNoteRepository(entryRepo, SEED_NOTES);
-  const users = new UserService(userRepo, silentLogger);
-  const entries = new EntryService(entryRepo, users, silentLogger);
-  const notes = new NoteService(noteRepo, entries, silentLogger);
-  return { userRepo, entryRepo, noteRepo, users, entries, notes };
+  const { logger, logs } = captureLogger();
+  const users = new UserService(userRepo, logger);
+  const entries = new EntryService(entryRepo, users, logger);
+  const notes = new NoteService(noteRepo, entries, logger);
+  return { userRepo, entryRepo, noteRepo, users, entries, notes, logger, logs };
 }
 
 export const PAGE = { limit: 50, offset: 0 };

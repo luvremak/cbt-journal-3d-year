@@ -5,10 +5,7 @@ import { ValidationError } from '../lib/errors.js';
 export function parseBody<S extends z.ZodType>(schema: S, body: unknown): z.output<S> {
   const result = schema.safeParse(body ?? {});
   if (!result.success) {
-    throw new ValidationError(
-      'Request body is invalid',
-      result.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
-    );
+    throw ValidationError.fromIssues('Request body is invalid', result.error.issues);
   }
   return result.data;
 }

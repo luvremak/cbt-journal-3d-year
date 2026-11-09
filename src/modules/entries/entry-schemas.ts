@@ -8,13 +8,13 @@ const requiredText = (max: number) => z.string().trim().min(1).max(max);
 
 /** spec §4: відсутнє, null, "" або пробіли → NULL. */
 const optionalText = z.preprocess(
-  (value) => (value === undefined || value === null ? null : value),
+  (value) => (value === undefined ? null : value),
   z
     .string()
     .trim()
     .max(MAX_TEXT)
     .nullable()
-    .transform((v) => (v === null || v === '' ? null : v)),
+    .transform((v) => (v === '' ? null : v)),
 );
 
 /** Тіло POST /client/entries — назви полів як у spec. */

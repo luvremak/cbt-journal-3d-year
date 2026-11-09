@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { NotFoundError, UnauthorizedError } from '../../src/lib/errors.js';
-import { InMemoryUserRepository } from '../../src/modules/users/in-memory-user-repository.js';
+import {
+  compareByNameThenId,
+  InMemoryUserRepository,
+} from '../../src/modules/users/in-memory-user-repository.js';
 import { UserService } from '../../src/modules/users/user-service.js';
 import { SEED_IDS } from '../../src/seed-data.js';
 import {
@@ -51,9 +54,17 @@ describe('UserService: client ↔ therapist', () => {
     expect((await users.getTherapistOf(sofiia())).id).toBe(SEED_IDS.therapistAndrii);
   });
 
-  it('client without an existing therapist → 404 (data integrity guard)', async () => {
+  it('client without an existing therapist → 404 (data integrity guard), logged as error', async () => {
+    const { users, logs } = createServices();
     const broken = { ...iryna(), therapistId: null };
     await expect(users.getTherapistOf(broken)).rejects.toThrow(NotFoundError);
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        level: 50,
+        msg: 'client has no therapist',
+        clientId: SEED_IDS.clientIryna,
+      }),
+    );
     const dangling = { ...iryna(), therapistId: '99999999-9999-4999-8999-999999999999' };
     await expect(users.getTherapistOf(dangling)).rejects.toThrow('Therapist not found');
   });
@@ -105,6 +116,22 @@ describe('InMemoryUserRepository', () => {
     const u = await repo.findById(SEED_IDS.clientIryna);
     if (u) u.name = 'changed';
     expect((await repo.findById(SEED_IDS.clientIryna))?.name).toBe('Ірина');
+  });
+
+  it('ignores non-clients even if their therapistId matches (corrupted data)', async () => {
+    const weird = { ...andrii(), therapistId: SEED_IDS.therapistOlena };
+    const repo = new InMemoryUserRepository([iryna(), weird]);
+    const list = await repo.findClientsByTherapist(SEED_IDS.therapistOlena, PAGE);
+    expect(list.map((u) => u.id)).toEqual([SEED_IDS.clientIryna]);
+  });
+
+  it('compareByNameThenId: name first, then id, equal → 0', () => {
+    const u = (name: string, id: string) => ({ ...iryna(), name, id });
+    expect(compareByNameThenId(u('A', '2'), u('B', '1'))).toBe(-1);
+    expect(compareByNameThenId(u('B', '1'), u('A', '2'))).toBe(1);
+    expect(compareByNameThenId(u('A', '1'), u('A', '2'))).toBe(-1);
+    expect(compareByNameThenId(u('A', '2'), u('A', '1'))).toBe(1);
+    expect(compareByNameThenId(u('A', '1'), u('A', '1'))).toBe(0);
   });
 
   it('equal names are ordered by id', async () => {

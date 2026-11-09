@@ -50,7 +50,7 @@ describe('parsePage (spec §4 pagination)', () => {
       expect((error as ValidationError).status).toBe(422);
       expect((error as ValidationError).message).toBe('Invalid pagination parameters');
       expect((error as ValidationError).details).toEqual([
-        expect.objectContaining({ field: 'offset' }),
+        { field: 'offset', message: 'must be a non-negative integer' },
       ]);
     }
   });
@@ -67,6 +67,11 @@ describe('compareNewestFirst', () => {
   it('equal time: higher id first (same as ORDER BY id DESC)', () => {
     const items = [at('2026-01-01', 'a'), at('2026-01-01', 'c'), at('2026-01-01', 'b')];
     expect(items.sort(compareNewestFirst).map((i) => i.id)).toEqual(['c', 'b', 'a']);
+  });
+
+  it('direct comparisons for equal time', () => {
+    expect(compareNewestFirst(at('2026-01-01', 'a'), at('2026-01-01', 'b'))).toBe(1);
+    expect(compareNewestFirst(at('2026-01-01', 'b'), at('2026-01-01', 'a'))).toBe(-1);
   });
 
   it('identical items compare equal', () => {

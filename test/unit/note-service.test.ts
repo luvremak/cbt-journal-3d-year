@@ -7,8 +7,11 @@ import { andrii, createServices, iryna, olena, PAGE, silentLogger } from '../hel
 
 describe('NoteService (spec §4 notes)', () => {
   it('therapist of the author creates a note', async () => {
-    const { notes } = createServices();
+    const { notes, logs } = createServices();
     const n = await notes.create(olena(), SEED_IDS.entryIryna2, 'Нотатка');
+    expect(logs).toContainEqual(
+      expect.objectContaining({ msg: 'note created', noteId: n.id, entryId: SEED_IDS.entryIryna2 }),
+    );
     expect(n).toMatchObject({
       entryId: SEED_IDS.entryIryna2,
       therapistId: SEED_IDS.therapistOlena,
@@ -25,11 +28,17 @@ describe('NoteService (spec §4 notes)', () => {
     await expect(notes.list(andrii(), SEED_IDS.entryIryna1, PAGE)).rejects.toThrow(NotFoundError);
   });
 
-  it('note on a deleted entry → 409', async () => {
-    const { notes, entries } = createServices();
+  it('note on a deleted entry → 409, logged', async () => {
+    const { notes, entries, logs } = createServices();
     await entries.deleteForClient(iryna(), SEED_IDS.entryIryna1);
     await expect(notes.create(olena(), SEED_IDS.entryIryna1, 'x')).rejects.toThrow(
       new ConflictError('Cannot add a note to a deleted entry'),
+    );
+    expect(logs).toContainEqual(
+      expect.objectContaining({
+        msg: 'note rejected: entry is deleted',
+        entryId: SEED_IDS.entryIryna1,
+      }),
     );
   });
 
@@ -41,7 +50,9 @@ describe('NoteService (spec §4 notes)', () => {
       await entries.deleteForClient(iryna(), SEED_IDS.entryIryna2); // «паралельне» видалення
       return realCreate(note);
     });
-    await expect(svc.create(olena(), SEED_IDS.entryIryna2, 'x')).rejects.toThrow(ConflictError);
+    await expect(svc.create(olena(), SEED_IDS.entryIryna2, 'x')).rejects.toThrow(
+      new ConflictError('Cannot add a note to a deleted entry'),
+    );
     expect(await noteRepo.findByEntry(SEED_IDS.entryIryna2, SEED_IDS.therapistOlena, PAGE)).toEqual(
       [],
     );
@@ -68,7 +79,7 @@ describe('NoteService (spec §4 notes)', () => {
 
 describe('InMemoryNoteRepository', () => {
   it('lists only the given therapist notes for the entry', async () => {
-    const repo = new InMemoryNoteRepository({ isActive: () => true });
+    const repo = new InMemoryNoteRepository({ isActive: () => true }, []);
     await repo.createIfEntryActive({ entryId: 'e1', therapistId: 't1', text: 'mine' });
     await repo.createIfEntryActive({ entryId: 'e1', therapistId: 't2', text: 'other' });
     await repo.createIfEntryActive({ entryId: 'e2', therapistId: 't1', text: 'other entry' });
@@ -76,7 +87,7 @@ describe('InMemoryNoteRepository', () => {
   });
 
   it('createIfEntryActive returns null and stores nothing for inactive entries', async () => {
-    const repo = new InMemoryNoteRepository({ isActive: () => false });
+    const repo = new InMemoryNoteRepository({ isActive: () => false }, []);
     expect(
       await repo.createIfEntryActive({ entryId: 'e1', therapistId: 't1', text: 'x' }),
     ).toBeNull();
@@ -84,7 +95,7 @@ describe('InMemoryNoteRepository', () => {
   });
 
   it('returns copies', async () => {
-    const repo = new InMemoryNoteRepository({ isActive: () => true });
+    const repo = new InMemoryNoteRepository({ isActive: () => true }, []);
     const n = await repo.createIfEntryActive({ entryId: 'e1', therapistId: 't1', text: 'x' });
     n?.createdAt.setFullYear(2000);
     expect((await repo.findByEntry('e1', 't1', PAGE))[0]?.createdAt.getFullYear()).not.toBe(2000);

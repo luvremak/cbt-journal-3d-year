@@ -30,6 +30,7 @@ describe('isUuid', () => {
     undefined,
     null,
     123,
+    { toString: () => '11111111-1111-4111-8111-111111111111' },
   ])('rejects %s', (v) => expect(isUuid(v)).toBe(false));
 });
 
@@ -46,6 +47,18 @@ describe('domain errors map to spec status codes', () => {
     expect(error.code).toBe(code);
     expect(error.name).toBe(error.constructor.name);
     expect(error.message).toBe('x');
+  });
+
+  it('ValidationError.fromIssues joins nested paths with dots', () => {
+    const e = ValidationError.fromIssues('bad', [
+      { path: ['items', 0, 'name'], message: 'required' },
+      { path: [], message: 'root' },
+    ]);
+    expect(e.message).toBe('bad');
+    expect(e.details).toEqual([
+      { field: 'items.0.name', message: 'required' },
+      { field: '', message: 'root' },
+    ]);
   });
 
   it('keeps details', () => {
@@ -78,6 +91,25 @@ describe('loadConfig', () => {
     expect(
       loadConfig({ PORT: '8080', LOG_LEVEL: 'debug', STORAGE: 'postgres', DATABASE_URL: 'pg://x' }),
     ).toEqual({ PORT: 8080, LOG_LEVEL: 'debug', STORAGE: 'postgres', DATABASE_URL: 'pg://x' });
+  });
+
+  it.each(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])(
+    'LOG_LEVEL=%s is accepted',
+    (level) => {
+      expect(loadConfig({ LOG_LEVEL: level }).LOG_LEVEL).toBe(level);
+    },
+  );
+
+  it('missing DATABASE_URL is reported on that field', () => {
+    const result = (() => {
+      try {
+        loadConfig({ STORAGE: 'postgres' });
+        return undefined;
+      } catch (error) {
+        return error as { issues: { path: string[] }[] };
+      }
+    })();
+    expect(result?.issues[0]?.path).toEqual(['DATABASE_URL']);
   });
 
   it('requires DATABASE_URL for postgres', () => {

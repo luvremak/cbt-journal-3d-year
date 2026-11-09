@@ -41,6 +41,15 @@ describe('DI Container', () => {
     expect(c.resolve(A).n).toBe(2);
   });
 
+  it('transient is never cached, even after a singleton was re-registered as transient', () => {
+    const c = new Container();
+    c.register(A, () => ({ n: 1 }));
+    c.resolve(A);
+    c.register(A, () => ({ n: 2 }), 'transient');
+    const first = c.resolve(A);
+    expect(c.resolve(A)).not.toBe(first);
+  });
+
   it('registerValue returns exactly that value', () => {
     const c = new Container();
     const value = { n: 7 };

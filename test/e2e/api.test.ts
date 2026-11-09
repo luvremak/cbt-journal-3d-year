@@ -61,9 +61,10 @@ describe.each(storages)('API e2e [%s]', (storage) => {
   };
 
   describe('health and routing', () => {
-    it('GET /health → 200 without auth', async () => {
+    it('GET /health → 200 without auth, no x-powered-by', async () => {
       const res = await request(t.app).get('/health').expect(200);
       expect(res.body).toEqual({ status: 'ok' });
+      expect(res.headers['x-powered-by']).toBeUndefined();
     });
 
     it('unknown route → 404 in the common error format', async () => {
@@ -157,6 +158,7 @@ describe.each(storages)('API e2e [%s]', (storage) => {
     ])('%s → 422 with field details', async (_n, body) => {
       const res = await as(C2).post('/client/entries', body).expect(422);
       expect(res.body.error.code).toBe('VALIDATION_ERROR');
+      expect(res.body.error.message).toBe('Request body is invalid');
       expect(res.body.error.details.length).toBeGreaterThan(0);
       expect(res.body.error.details[0]).toEqual({
         field: expect.any(String),
@@ -176,13 +178,17 @@ describe.each(storages)('API e2e [%s]', (storage) => {
         .send('{"situation":')
         .expect(400);
       expect(res.body.error).toEqual({ code: 'BAD_REQUEST', message: 'Malformed JSON body' });
+      expect(res.body.bp_id).toBe(res.headers['x-business-process-id']);
     });
 
     it('body over 100kb → 413', async () => {
       const res = await as(C2)
         .post('/client/entries', { ...entryBody, situation: 'a'.repeat(150_000) })
         .expect(413);
-      expect(res.body.error.code).toBe('PAYLOAD_TOO_LARGE');
+      expect(res.body.error).toEqual({
+        code: 'PAYLOAD_TOO_LARGE',
+        message: 'Request body is too large',
+      });
     });
 
     it('gets own entry by id', async () => {
@@ -358,6 +364,8 @@ describe.each(storages)('API e2e [%s]', (storage) => {
       const lines = t.logs.filter((l) => l.bpId === bpId);
       const messages = lines.map((l) => l.msg);
       expect(messages).toEqual(['request started', 'entry created', 'request finished']);
+      expect(lines.every((l) => l.service === 'cbt-journal')).toBe(true);
+      expect(lines[0]).toMatchObject({ method: 'POST', path: '/client/entries' });
       expect(lines.find((l) => l.msg === 'entry created')).toMatchObject({
         userId: C2,
         entryId: res.body.id,
@@ -368,6 +376,9 @@ describe.each(storages)('API e2e [%s]', (storage) => {
         status: 201,
         durationMs: expect.any(Number),
       });
+      const durationMs = lines.at(-1)?.durationMs as number;
+      expect(durationMs).toBeGreaterThan(0);
+      expect(durationMs).toBeLessThan(10_000);
     });
   });
 });

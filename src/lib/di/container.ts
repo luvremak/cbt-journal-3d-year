@@ -48,9 +48,7 @@ export class Container {
 
   /** Зареєструвати вже готове значення (конфіг, пул з'єднань тощо). */
   registerValue<T>(token: Token<T>, value: T): this {
-    this.registrations.set(token, { factory: () => value, lifetime: 'singleton' });
-    this.singletons.set(token, value);
-    return this;
+    return this.register(token, () => value);
   }
 
   has(token: symbol): boolean {
@@ -63,7 +61,8 @@ export class Container {
       throw new DependencyNotRegisteredError(token);
     }
 
-    if (registration.lifetime === 'singleton' && this.singletons.has(token)) {
+    // У кеші лежать лише singleton-и (див. нижче).
+    if (this.singletons.has(token)) {
       return this.singletons.get(token) as T;
     }
 

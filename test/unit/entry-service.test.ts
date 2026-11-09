@@ -18,9 +18,12 @@ import {
 const UNKNOWN = '99999999-9999-4999-8999-999999999999';
 
 describe('EntryService — client', () => {
-  it('creates an entry owned by the client', async () => {
-    const { entries } = createServices();
+  it('creates an entry owned by the client and logs it', async () => {
+    const { entries, logs } = createServices();
     const e = await entries.create(maksym(), validEntry);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ level: 30, msg: 'entry created', entryId: e.id }),
+    );
     expect(e).toMatchObject({ ...validEntry, clientId: SEED_IDS.clientMaksym, deletedAt: null });
     expect(e.createdAt).toBeInstanceOf(Date);
     expect((await entries.listForClient(maksym(), PAGE)).map((x) => x.id)).toEqual([e.id]);
@@ -58,8 +61,11 @@ describe('EntryService — client', () => {
   });
 
   it('soft delete hides the entry from the client (spec §4)', async () => {
-    const { entries, entryRepo } = createServices();
+    const { entries, entryRepo, logs } = createServices();
     await entries.deleteForClient(iryna(), SEED_IDS.entryIryna1);
+    expect(logs).toContainEqual(
+      expect.objectContaining({ msg: 'entry soft-deleted', entryId: SEED_IDS.entryIryna1 }),
+    );
     expect((await entries.listForClient(iryna(), PAGE)).map((e) => e.id)).toEqual([
       SEED_IDS.entryIryna2,
     ]);
@@ -84,6 +90,9 @@ describe('EntryService — client', () => {
   it('delete that loses a race (repository reports nothing changed) → 404', async () => {
     const { users } = createServices();
     const repo = new InMemoryEntryRepository([]);
+    expect(
+      await repo.findByClient(SEED_IDS.clientIryna, { includeDeleted: true, page: PAGE }),
+    ).toEqual([]);
     const e = await repo.create({ ...validEntry, clientId: SEED_IDS.clientIryna });
     vi.spyOn(repo, 'softDelete').mockResolvedValue(false);
     const svc = new EntryService(repo, users, silentLogger);
