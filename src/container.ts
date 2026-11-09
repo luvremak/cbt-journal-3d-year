@@ -3,7 +3,7 @@ import { createPool } from './db/pool.js';
 import { PgEntryRepository } from './modules/entries/pg-entry-repository.js';
 import { PgNoteRepository } from './modules/notes/pg-note-repository.js';
 import { PgUserRepository } from './modules/users/pg-user-repository.js';
-import { Container } from './lib/di/container.js';
+import { Container } from '@cbt-journal/di';
 import { readPackageVersion } from './build-info.js';
 import { createLogger } from './lib/logger.js';
 import { SystemService } from './modules/system/system-service.js';
@@ -71,7 +71,7 @@ function registerPostgresRepositories(c: Container, config: Config): void {
   const url = config.DATABASE_URL;
   // loadConfig уже це перевіряє; захист на випадок конфігу, зібраного вручну.
   if (!url) throw new Error('DATABASE_URL is required when STORAGE=postgres');
-  c.register(TOKENS.pool, () => createPool(url));
+  c.register(TOKENS.pool, () => createPool(url), { dispose: (pool) => pool.end() });
   c.register(TOKENS.userRepository, (c) => new PgUserRepository(c.resolve(TOKENS.pool)));
   c.register(TOKENS.entryRepository, (c) => new PgEntryRepository(c.resolve(TOKENS.pool)));
   c.register(TOKENS.noteRepository, (c) => new PgNoteRepository(c.resolve(TOKENS.pool)));

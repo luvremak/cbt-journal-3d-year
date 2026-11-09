@@ -60,9 +60,15 @@ jobs:
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci
       - run: npm run mutation
+      - name: Mutation testing of the DI library
+        run: npm run mutation:di
       - uses: actions/upload-artifact@v4
         if: always()
-        with: { name: mutation-results, path: reports/mutation/mutation.json }
+        with:
+          name: mutation-results
+          path: |
+            reports/mutation/mutation.json
+            reports/mutation-di.json
 
   sql-mutation:
     name: SQL mutants
@@ -137,7 +143,8 @@ jobs:
           mkdir -p reports/coverage reports/mutation
           cp artifacts/test-results/tests.json reports/ 2>/dev/null || true
           cp artifacts/test-results/coverage/coverage-summary.json reports/coverage/ 2>/dev/null || true
-          cp artifacts/mutation-results/mutation.json reports/mutation/ 2>/dev/null || true
+          cp artifacts/mutation-results/mutation/mutation.json reports/mutation/ 2>/dev/null || true
+          cp artifacts/mutation-results/mutation-di.json reports/ 2>/dev/null || true
           cp artifacts/sql-mutation-results/sql-mutation.json reports/ 2>/dev/null || true
       - run: npm run report
       - uses: actions/upload-artifact@v4

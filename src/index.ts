@@ -16,7 +16,7 @@ for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     logger.info({ signal }, 'shutting down');
     server.close(async () => {
-      if (container.has(TOKENS.pool)) await container.resolve(TOKENS.pool).end();
+      await container.dispose(); // закриває пул з'єднань з БД
       process.exit(0);
     });
   });

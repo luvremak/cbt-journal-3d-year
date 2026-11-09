@@ -1,0 +1,29 @@
+{
+  "name": "@cbt-journal/di",
+  "version": "1.0.0",
+  "description": "Типізований DI-контейнер без залежностей: токени, singleton/transient, виявлення циклів, dispose.",
+  "type": "module",
+  "private": true,
+  "license": "UNLICENSED",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "prepare": "tsc -p tsconfig.build.json",
+    "test": "vitest run",
+    "mutation": "stryker run"
+  }
+}

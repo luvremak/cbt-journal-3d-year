@@ -1,5 +1,5 @@
 import express, { Router, type Express } from 'express';
-import type { Container } from '../lib/di/container.js';
+import type { Container } from '@cbt-journal/di';
 import {
   mountClientEntryRoutes,
   mountTherapistEntryRoutes,

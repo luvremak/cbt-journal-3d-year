@@ -11,8 +11,12 @@ process.env.TEST_DATABASE_URL = TEST_DATABASE_URL;
  * Без БД — лише явно: `npm run test:nodb` (vitest.nodb.config.ts).
  */
 export default defineConfig({
+  // Тести застосунку беруть бібліотеку з вихідного коду (як і typecheck через paths).
+  resolve: {
+    alias: { '@cbt-journal/di': new URL('./packages/di/src/index.ts', import.meta.url).pathname },
+  },
   test: {
-    include: ['test/**/*.test.ts'],
+    include: ['test/**/*.test.ts', 'packages/*/test/**/*.test.ts'],
     globalSetup: ['test/helpers/global-setup.ts'],
     // Інтеграційні й E2E-тести ділять одну тестову БД — файли по черзі.
     fileParallelism: false,
@@ -22,7 +26,7 @@ export default defineConfig({
       // Підсумок для звіту якості (scripts/quality-report.mjs) і текст у консоль.
       reporter: ['text-summary', 'json-summary'],
       reportsDirectory: 'reports/coverage',
-      include: ['src/**/*.ts'],
+      include: ['src/**/*.ts', 'packages/*/src/**/*.ts'],
       exclude: ['src/index.ts'],
     },
   },

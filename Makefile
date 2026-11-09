@@ -56,6 +56,7 @@ coverage:
 # Мутаційне тестування коду (Stryker). Звіт якості оновлюється: reports/index.html
 mutation:
 	npm run mutation
+	npm run mutation:di
 	npm run report
 
 # Мутаційне тестування SQL-умов у репозиторіях (потрібен `make db-up`).
@@ -67,5 +68,6 @@ mutation-sql:
 report:
 	npm run test:report
 	npm run mutation
+	npm run mutation:di
 	npm run mutation:sql
 	npm run report
