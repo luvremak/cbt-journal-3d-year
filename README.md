@@ -85,7 +85,7 @@ routes → services → repositories → PostgreSQL / пам'ять
 
 ```bash
 make db-up          # PostgreSQL потрібен для повного прогону
-make test           # 305 тестів: unit + інтеграційні + E2E (memory і PostgreSQL)
+make test           # 309 тестів: unit + інтеграційні + E2E (memory і PostgreSQL)
 make test-nodb      # без БД (unit + in-memory частина)
 make coverage       # покриття → консоль і reports/coverage/
 make mutation       # Stryker (поріг 80 %, зараз 100 %) → reports/index.html

@@ -125,10 +125,49 @@ describe('InMemoryUserRepository', () => {
     expect(list.map((u) => u.id)).toEqual([SEED_IDS.clientIryna]);
   });
 
+  it('compareByNameThenId: Ukrainian alphabet, not code points (spec §4)', () => {
+    const u = (name: string, i: number) => ({ ...iryna(), name, id: String(i) });
+    const names = [
+      'Ірина',
+      'Євген',
+      'Ґанна',
+      'Андрій',
+      'Йосип',
+      'Богдан',
+      'Ївга',
+      'Гліб',
+      'Иван',
+      'Ігор',
+    ];
+    const sorted = names
+      .map(u)
+      .sort(compareByNameThenId)
+      .map((x) => x.name);
+    expect(sorted).toEqual([
+      'Андрій',
+      'Богдан',
+      'Гліб',
+      'Ґанна',
+      'Євген',
+      'Иван',
+      'Ігор',
+      'Ірина',
+      'Ївга',
+      'Йосип',
+    ]);
+  });
+
+  it('compareByNameThenId: case-insensitive, equal names fall back to id', () => {
+    const u = (name: string, id: string) => ({ ...iryna(), name, id });
+    expect(compareByNameThenId(u('андрій', '2'), u('Андрій', '1'))).toBe(1);
+    expect(compareByNameThenId(u('АНДРІЙ', '1'), u('андрій', '2'))).toBe(-1);
+    expect(compareByNameThenId(u('андрій', '1'), u('Богдан', '0'))).toBeLessThan(0);
+  });
+
   it('compareByNameThenId: name first, then id, equal → 0', () => {
     const u = (name: string, id: string) => ({ ...iryna(), name, id });
-    expect(compareByNameThenId(u('A', '2'), u('B', '1'))).toBe(-1);
-    expect(compareByNameThenId(u('B', '1'), u('A', '2'))).toBe(1);
+    expect(compareByNameThenId(u('A', '2'), u('B', '1'))).toBeLessThan(0);
+    expect(compareByNameThenId(u('B', '1'), u('A', '2'))).toBeGreaterThan(0);
     expect(compareByNameThenId(u('A', '1'), u('A', '2'))).toBe(-1);
     expect(compareByNameThenId(u('A', '2'), u('A', '1'))).toBe(1);
     expect(compareByNameThenId(u('A', '1'), u('A', '1'))).toBe(0);

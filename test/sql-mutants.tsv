@@ -9,5 +9,5 @@ src/modules/notes/pg-note-repository.ts	AND deleted_at IS NULL FOR SHARE	AND del
 src/modules/notes/pg-note-repository.ts	WHERE entry_id = $1 AND therapist_id = $2	WHERE entry_id = $1 AND $2::uuid IS NOT NULL
 src/modules/notes/pg-note-repository.ts	ORDER BY created_at DESC, id DESC	ORDER BY created_at ASC, id DESC
 src/modules/users/pg-user-repository.ts	WHERE role = 'client' AND therapist_id = $1	WHERE therapist_id = $1 OR id = $1
-src/modules/users/pg-user-repository.ts	ORDER BY name COLLATE "C", id	ORDER BY name DESC, id
+src/modules/users/pg-user-repository.ts	ORDER BY name COLLATE uk_ci, id	ORDER BY name COLLATE "C", id
 src/db/seed.ts	WHERE c.role = 'client' AND (t.id IS NULL OR t.role <> 'therapist')	WHERE c.role = 'client' AND t.id IS NULL

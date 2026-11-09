@@ -5,6 +5,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../../src/db/migrate.js';
 import type { Pool } from '../../src/db/pool.js';
 import { findClientsWithInvalidTherapist, seed } from '../../src/db/seed.js';
+import { PgEntryRepository } from '../../src/modules/entries/pg-entry-repository.js';
 import { PgNoteRepository } from '../../src/modules/notes/pg-note-repository.js';
 import { SEED_IDS, SEED_USERS } from '../../src/seed-data.js';
 import { createTestPool, hasDb, resetDb } from '../helpers/db.js';
@@ -61,7 +62,7 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
     it('re-running applies nothing', async () => {
       expect(await migrate(pool)).toEqual([]);
       const { rows } = await pool.query<{ name: string }>('SELECT name FROM schema_migrations');
-      expect(rows.map((r) => r.name)).toEqual(['001_init.sql']);
+      expect(rows.map((r) => r.name).sort()).toEqual(['001_init.sql', '002_uk_collation.sql']);
     });
   });
 
@@ -120,7 +121,7 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
       const deleter = await pool.connect();
       try {
         await deleter.query('BEGIN');
-        await deleter.query('UPDATE entries SET deleted_at = now() WHERE id = $1', [
+        await deleter.query('UPDATE entries SET deleted_at = clock_timestamp() WHERE id = $1', [
           SEED_IDS.entryIryna2,
         ]);
         const pending = notes().createIfEntryActive({ ...note, entryId: SEED_IDS.entryIryna2 });
@@ -148,17 +149,14 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
           [SEED_IDS.entryIryna2, SEED_IDS.therapistOlena],
         );
         expect(inserted.rowCount).toBe(1);
-        const pendingDelete = pool.query(
-          'UPDATE entries SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL',
-          [SEED_IDS.entryIryna2],
-        );
+        const pendingDelete = new PgEntryRepository(pool).softDelete(SEED_IDS.entryIryna2);
         const raced = await Promise.race([
           pendingDelete.then(() => 'finished'),
           new Promise((r) => setTimeout(() => r('waiting'), 300)),
         ]);
         expect(raced).toBe('waiting');
         await writer.query('COMMIT');
-        expect((await pendingDelete).rowCount).toBe(1);
+        expect(await pendingDelete).toBe(true);
         const { rows } = await pool.query<{ ok: boolean }>(
           `SELECT bool_and(n.created_at <= e.deleted_at) AS ok
            FROM therapist_notes n JOIN entries e ON e.id = n.entry_id WHERE e.id = $1`,
@@ -170,7 +168,7 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
       }
     });
 
-    it('many parallel note/delete pairs never leave a note created after deletion', async () => {
+    it('many parallel note/delete pairs: no note is timestamped after its entry deletion', async () => {
       const ids: string[] = [];
       for (let i = 0; i < 30; i++) {
         const { rows } = await pool.query<{ id: string }>(
@@ -183,9 +181,7 @@ describe.skipIf(!hasDb)('PostgreSQL integration', () => {
       await Promise.all(
         ids.flatMap((id) => [
           notes().createIfEntryActive({ ...note, entryId: id }),
-          pool.query('UPDATE entries SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL', [
-            id,
-          ]),
+          new PgEntryRepository(pool).softDelete(id),
         ]),
       );
       const { rows } = await pool.query<{ n: string }>(

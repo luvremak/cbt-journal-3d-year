@@ -52,9 +52,14 @@ export class PgEntryRepository implements EntryRepository {
     return rows.map(toEntry);
   }
 
+  /**
+   * clock_timestamp(), а не now(): now() — час початку запиту, а видалення могло
+   * чекати на паралельну нотатку (FOR SHARE). Тоді deleted_at був би раніше за
+   * created_at нотатки, хоча нотатку створено першою (spec §4, послідовний порядок).
+   */
   async softDelete(id: string): Promise<boolean> {
     const result = await this.pool.query(
-      'UPDATE entries SET deleted_at = now() WHERE id = $1 AND deleted_at IS NULL',
+      'UPDATE entries SET deleted_at = clock_timestamp() WHERE id = $1 AND deleted_at IS NULL',
       [id],
     );
     return result.rowCount === 1;

@@ -1,10 +1,13 @@
 import { slicePage, type Page } from '../../lib/pagination.js';
 import type { User, UserRepository } from './user.js';
 
-/** Той самий порядок, що `ORDER BY name COLLATE "C", id` у PostgreSQL. */
+/** spec §4: українська абетка без урахування регістру (як колація `uk_ci` у PostgreSQL). */
+const ukrainian = new Intl.Collator('uk', { sensitivity: 'accent' });
+
+/** Той самий порядок, що `ORDER BY name COLLATE uk_ci, id` у PostgreSQL. */
 export function compareByNameThenId(a: User, b: User): number {
-  if (a.name < b.name) return -1;
-  if (a.name > b.name) return 1;
+  const byName = ukrainian.compare(a.name, b.name);
+  if (byName !== 0) return byName;
   if (a.id < b.id) return -1;
   if (a.id > b.id) return 1;
   return 0;

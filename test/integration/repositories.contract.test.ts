@@ -12,7 +12,7 @@ import type { NoteRepository } from '../../src/modules/notes/note.js';
 import { PgNoteRepository } from '../../src/modules/notes/pg-note-repository.js';
 import { InMemoryUserRepository } from '../../src/modules/users/in-memory-user-repository.js';
 import { PgUserRepository } from '../../src/modules/users/pg-user-repository.js';
-import type { UserRepository } from '../../src/modules/users/user.js';
+import type { User, UserRepository } from '../../src/modules/users/user.js';
 import { SEED_ENTRIES, SEED_IDS, SEED_NOTES, SEED_USERS } from '../../src/seed-data.js';
 import { createTestPool, hasDb, resetDb } from '../helpers/db.js';
 
@@ -33,7 +33,20 @@ const newEntry = {
   rationalResponse: null,
 };
 
-function contract(name: string, setup: () => Promise<Repos>, skip = false) {
+/** Додаткові клієнти терапевта Андрія понад seed (у seed у нього вже є Софія). */
+function clientsOfAndrii(extra: [name: string, id: string][]): User[] {
+  return extra.map(([name, id]) => ({
+    id,
+    role: 'client',
+    name,
+    contacts: 'x',
+    therapistId: SEED_IDS.therapistAndrii,
+  }));
+}
+
+type Setup = (extraUsers?: User[]) => Promise<Repos>;
+
+function contract(name: string, setup: Setup, skip = false) {
   describe.skipIf(skip)(`repository contract [${name}]`, () => {
     let r: Repos;
     beforeEach(async () => {
@@ -46,6 +59,28 @@ function contract(name: string, setup: () => Promise<Repos>, skip = false) {
           SEED_USERS.find((u) => u.id === SEED_IDS.clientIryna),
         );
         expect(await r.users.findById(UNKNOWN)).toBeNull();
+      });
+
+      it('findClientsByTherapist: Ukrainian alphabet, case-insensitive, then id (spec §4)', async () => {
+        const repos = await setup(
+          clientsOfAndrii([
+            ['Євген', 'eeeeeeee-0000-4000-8000-000000000001'],
+            ['Андрій', 'eeeeeeee-0000-4000-8000-000000000002'],
+            ['Ірина', 'eeeeeeee-0000-4000-8000-000000000003'],
+            ['Богдан', 'eeeeeeee-0000-4000-8000-000000000004'],
+            ['андрій', 'eeeeeeee-0000-4000-8000-000000000000'],
+          ]),
+        );
+        const list = await repos.users.findClientsByTherapist(SEED_IDS.therapistAndrii, PAGE);
+        // «андрій» і «Андрій» рівні без урахування регістру → далі за id.
+        expect(list.map((u) => u.name)).toEqual([
+          'андрій',
+          'Андрій',
+          'Богдан',
+          'Євген',
+          'Ірина',
+          'Софія',
+        ]);
       });
 
       it('findClientsByTherapist: only clients of that therapist, by name, paginated', async () => {
@@ -155,10 +190,10 @@ function contract(name: string, setup: () => Promise<Repos>, skip = false) {
   });
 }
 
-contract('memory', async () => {
+contract('memory', async (extraUsers = []) => {
   const entries = new InMemoryEntryRepository(SEED_ENTRIES);
   return {
-    users: new InMemoryUserRepository(SEED_USERS),
+    users: new InMemoryUserRepository([...SEED_USERS, ...extraUsers]),
     entries,
     notes: new InMemoryNoteRepository(entries, SEED_NOTES),
   };
@@ -174,9 +209,15 @@ afterAll(async () => {
 
 contract(
   'postgres',
-  async () => {
+  async (extraUsers = []) => {
     if (!pool) throw new Error('no pool');
     await resetDb(pool);
+    for (const u of extraUsers) {
+      await pool.query(
+        'INSERT INTO users (id, role, name, contacts, therapist_id) VALUES ($1, $2, $3, $4, $5)',
+        [u.id, u.role, u.name, u.contacts, u.therapistId],
+      );
+    }
     return {
       users: new PgUserRepository(pool),
       entries: new PgEntryRepository(pool),
