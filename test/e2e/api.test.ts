@@ -61,10 +61,25 @@ describe.each(storages)('API e2e [%s]', (storage) => {
   };
 
   describe('health and routing', () => {
-    it('GET /health → 200 without auth, no x-powered-by', async () => {
+    it('GET /health → 200 without auth, no x-powered-by, checks the database', async () => {
       const res = await request(t.app).get('/health').expect(200);
-      expect(res.body).toEqual({ status: 'ok' });
+      expect(res.body).toEqual({
+        status: 'ok',
+        database: storage === 'postgres' ? 'ok' : 'not_used',
+      });
       expect(res.headers['x-powered-by']).toBeUndefined();
+    });
+
+    it('GET /version → build info and the last applied migration, without auth', async () => {
+      const res = await request(t.app).get('/version').expect(200);
+      expect(res.body).toEqual({
+        version: expect.stringMatching(/^\d+\.\d+\.\d+/),
+        commit: 'unknown',
+        environment: 'local',
+        storage,
+        started_at: expect.any(String),
+        migration: storage === 'postgres' ? '002_uk_collation.sql' : null,
+      });
     });
 
     it('unknown route → 404 in the common error format', async () => {

@@ -4,7 +4,9 @@ import { PgEntryRepository } from './modules/entries/pg-entry-repository.js';
 import { PgNoteRepository } from './modules/notes/pg-note-repository.js';
 import { PgUserRepository } from './modules/users/pg-user-repository.js';
 import { Container } from './lib/di/container.js';
+import { readPackageVersion } from './build-info.js';
 import { createLogger } from './lib/logger.js';
+import { SystemService } from './modules/system/system-service.js';
 import { EntryService } from './modules/entries/entry-service.js';
 import { InMemoryEntryRepository } from './modules/entries/in-memory-entry-repository.js';
 import { InMemoryNoteRepository } from './modules/notes/in-memory-note-repository.js';
@@ -46,6 +48,20 @@ export function buildContainer(config: Config): Container {
         c.resolve(TOKENS.noteRepository),
         c.resolve(TOKENS.entryService),
         c.resolve(TOKENS.logger),
+      ),
+  );
+  c.register(
+    TOKENS.systemService,
+    (c) =>
+      new SystemService(
+        {
+          version: readPackageVersion(),
+          commit: config.GIT_COMMIT,
+          environment: config.APP_ENV,
+          storage: config.STORAGE,
+          startedAt: new Date(),
+        },
+        c.has(TOKENS.pool) ? c.resolve(TOKENS.pool) : null,
       ),
   );
   return c;

@@ -30,6 +30,16 @@ describe('buildContainer', () => {
     expect(c.resolve(TOKENS.userService)).toBeInstanceOf(UserService);
     expect(c.resolve(TOKENS.entryService)).toBeInstanceOf(EntryService);
     expect(c.resolve(TOKENS.noteService)).toBeInstanceOf(NoteService);
+    expect(await c.resolve(TOKENS.systemService).health()).toEqual({
+      status: 'ok',
+      database: 'not_used',
+    });
+    expect(await c.resolve(TOKENS.systemService).version()).toMatchObject({
+      storage: 'memory',
+      environment: 'local',
+      commit: 'unknown',
+      migration: null,
+    });
     // Статичні дані вже на місці.
     expect(await c.resolve(TOKENS.userRepository).findById(SEED_IDS.clientIryna)).not.toBeNull();
   });
@@ -46,9 +56,15 @@ describe('buildContainer', () => {
   });
 
   it('postgres without DATABASE_URL (config built by hand) fails fast', () => {
-    expect(() => buildContainer({ PORT: 1, LOG_LEVEL: 'silent', STORAGE: 'postgres' })).toThrow(
-      'DATABASE_URL is required when STORAGE=postgres',
-    );
+    expect(() =>
+      buildContainer({
+        PORT: 1,
+        LOG_LEVEL: 'silent',
+        STORAGE: 'postgres',
+        APP_ENV: 'test',
+        GIT_COMMIT: 'x',
+      }),
+    ).toThrow('DATABASE_URL is required when STORAGE=postgres');
   });
 
   it('postgres: Pg repositories on one pool from DATABASE_URL (no connection is opened)', async () => {
@@ -61,6 +77,7 @@ describe('buildContainer', () => {
       expect(c.resolve(TOKENS.entryRepository)).toBeInstanceOf(PgEntryRepository);
       expect(c.resolve(TOKENS.noteRepository)).toBeInstanceOf(PgNoteRepository);
       expect(pool.totalCount).toBe(0);
+      expect((await c.resolve(TOKENS.systemService).version()).storage).toBe('postgres');
     } finally {
       await pool.end();
     }

@@ -9,6 +9,10 @@ const schema = z
     /** memory — статичні дані в пам'яті; postgres — PostgreSQL за DATABASE_URL. */
     STORAGE: z.enum(['memory', 'postgres']).default('memory'),
     DATABASE_URL: z.string().optional(),
+    /** Назва оточення для /version: local, ci, staging. */
+    APP_ENV: z.string().min(1).default('local'),
+    /** Коміт збірки для /version; на Render береться з RENDER_GIT_COMMIT. */
+    GIT_COMMIT: z.string().min(1).default('unknown'),
   })
   .refine((c) => c.STORAGE !== 'postgres' || Boolean(c.DATABASE_URL), {
     message: 'DATABASE_URL is required when STORAGE=postgres',
@@ -18,5 +22,5 @@ const schema = z
 export type Config = z.output<typeof schema>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  return schema.parse(env);
+  return schema.parse({ ...env, GIT_COMMIT: env.GIT_COMMIT || env.RENDER_GIT_COMMIT || undefined });
 }

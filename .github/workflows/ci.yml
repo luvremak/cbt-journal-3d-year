@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '22'
+
+jobs:
+  check:
+    name: Typecheck, lint, format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run format:check
+
+  test:
+    name: Tests (unit, integration, e2e) + coverage
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: cbt, POSTGRES_PASSWORD: cbt, POSTGRES_DB: cbt }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cbt" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://cbt:cbt@localhost:5432/cbt_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run test:report
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: |
+            reports/tests.json
+            reports/coverage/coverage-summary.json
+
+  mutation:
+    name: Mutation testing (Stryker)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run mutation
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: mutation-results, path: reports/mutation/mutation.json }
+
+  sql-mutation:
+    name: SQL mutants
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: cbt, POSTGRES_PASSWORD: cbt, POSTGRES_DB: cbt }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cbt" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://cbt:cbt@localhost:5432/cbt_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - run: npm run mutation:sql
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: sql-mutation-results, path: reports/sql-mutation.json }
+
+  compat:
+    name: Zero-downtime migrations (old version on new schema)
+    runs-on: ubuntu-latest
+    # Попередня версія: база PR або попередній коміт main.
+    if: github.event_name == 'pull_request' || github.event.before != '0000000000000000000000000000000000000000'
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: cbt, POSTGRES_PASSWORD: cbt, POSTGRES_DB: cbt_compat }
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U cbt" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgres://cbt:cbt@localhost:5432/cbt_compat
+    steps:
+      - uses: actions/checkout@v4
+        with: { path: new }
+      - uses: actions/checkout@v4
+        with:
+          path: old
+          ref: ${{ github.event.pull_request.base.sha || github.event.before }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '${{ env.NODE_VERSION }}'
+          cache: npm
+          cache-dependency-path: |
+            new/package-lock.json
+            old/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: old
+      - run: npm ci && npm run build
+        working-directory: new
+      - run: new/scripts/compat-check.sh old new
+
+  report:
+    name: Quality report
+    runs-on: ubuntu-latest
+    needs: [test, mutation, sql-mutation]
+    if: always()
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Put results where the report expects them
+        run: |
+          mkdir -p reports/coverage reports/mutation
+          cp artifacts/test-results/tests.json reports/ 2>/dev/null || true
+          cp artifacts/test-results/coverage/coverage-summary.json reports/coverage/ 2>/dev/null || true
+          cp artifacts/mutation-results/mutation.json reports/mutation/ 2>/dev/null || true
+          cp artifacts/sql-mutation-results/sql-mutation.json reports/ 2>/dev/null || true
+      - run: npm run report
+      - uses: actions/upload-artifact@v4
+        with: { name: quality-report, path: reports/index.html }

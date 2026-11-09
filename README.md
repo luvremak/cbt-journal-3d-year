@@ -81,6 +81,32 @@ routes → services → repositories → PostgreSQL / пам'ять
 - **Помилки:** сервіси кидають доменні помилки (`src/lib/errors.ts`), глобальний обробник перетворює їх на HTTP-коди за spec.
 - **Міграції:** `migrations/*.sql`, застосовуються `npm run db:migrate` і запам'ятовуються в `schema_migrations`.
 
+## CI/CD і стейдж
+
+```
+push / PR ──► GitHub Actions (CI) ──► зелений main ──► Render деплоїть стейдж ──► Staging smoke
+              check · test · mutation    autoDeployTrigger:   міграції → seed →     чекає новий коміт
+              sql-mutation · compat      checksPass            сервер; трафік лише   у /version і
+              report (артефакт)                                після 200 на /health  проганяє smoke
+```
+
+- **CI** (`.github/workflows/ci.yml`): типи, лінтер, формат; усі тести на PostgreSQL 17; Stryker; SQL-мутанти; `compat` — стара версія на новій схемі (міграції без простою, [standards/migrations.md](standards/migrations.md)); звіт якості як артефакт `quality-report`.
+- **CD** (`render.yaml`): безкоштовний вебсервіс і PostgreSQL на Render. Деплой лише з `main` і лише після зелених перевірок. Секретів у GitHub немає: `DATABASE_URL` Render підставляє сам.
+- **Після деплою** (`.github/workflows/staging.yml`): чекає, поки `GET /version` покаже новий коміт, і проганяє `scripts/smoke.mjs` проти стейджу. Потрібна змінна репозиторію `STAGING_URL`.
+- **`GET /version`** — версія, коміт, оточення, остання застосована міграція. **`GET /health`** — 200 лише коли є з'єднання з БД.
+
+### Як підняти стейдж (один раз)
+
+1. [dashboard.render.com](https://dashboard.render.com) → увійти через GitHub.
+2. **New → Blueprint** → вибрати `luvremak/cbt-journal-3d-year` → **Apply**. Render створить базу і сервіс із `render.yaml`.
+3. Скопіювати адресу сервісу (`https://cbt-journal-staging….onrender.com`) і додати її в GitHub: **Settings → Secrets and variables → Actions → Variables → New variable** `STAGING_URL`.
+
+### Обмеження безкоштовного тарифу
+
+- Сервіс засинає після 15 хв без запитів; перший запит після цього — до хвилини.
+- Безкоштовна база живе **30 днів** від створення. Стейдж повністю відтворюється з нуля (міграції + seed при старті): видалити базу в Render → **Blueprint → Sync** → нова база, сервіс перезапуститься.
+- Стейдж публічний, а автентифікації немає (spec §6): там лише тестові дані з seed. Справжні записи туди не вносити.
+
 ## Тести
 
 ```bash
@@ -107,9 +133,11 @@ make report         # усе разом → reports/index.html
 ```
 src/          код застосунку
 migrations/   SQL-міграції
-standards/    правила розробки (код, git, тести)
+standards/    правила розробки (код, git, тести, міграції)
 test/         unit/, integration/, e2e/, helpers/
-scripts/      допоміжні скрипти (мутації SQL)
+scripts/      звіт якості, мутації SQL, smoke, перевірка сумісності міграцій
+.github/      CI/CD (GitHub Actions)
+render.yaml   стейдж на Render
 ai/           слід роботи з AI: питання й відповіді дослівно
 audit/        аудити по завданнях (топ-3 знахідки)
 spec.md       специфікація: ролі, модулі, бізнес-правила, ER
