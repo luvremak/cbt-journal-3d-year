@@ -88,7 +88,7 @@ make db-up          # PostgreSQL потрібен для повного прог
 make test           # 305 тестів: unit + інтеграційні + E2E (memory і PostgreSQL)
 make test-nodb      # без БД (unit + in-memory частина)
 make coverage       # покриття → консоль і reports/coverage/
-make mutation       # Stryker → reports/mutation/index.html (поріг 80 %, зараз 100 %)
+make mutation       # Stryker (поріг 80 %, зараз 100 %) → reports/index.html
 make mutation-sql   # мутанти SQL-умов із test/sql-mutants.tsv (зараз 13/13)
 make report         # усе разом → reports/index.html
 ```

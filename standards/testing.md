@@ -28,7 +28,7 @@ make db-up          # PostgreSQL у Docker (потрібен для make test і
 make test           # усі тести
 make test-nodb      # без БД
 make coverage       # покриття: підсумок у консолі й reports/coverage/
-make mutation       # Stryker: reports/mutation/index.html
+make mutation       # Stryker → reports/index.html
 make mutation-sql   # ручні мутанти SQL
 make report         # усе разом → reports/index.html (звіт якості для захисту)
 ```

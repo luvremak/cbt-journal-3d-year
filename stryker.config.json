@@ -14,10 +14,7 @@
     "!src/seed-data.ts",
     "!src/tokens.ts"
   ],
-  "reporters": ["clear-text", "progress", "html", "json"],
-  "htmlReporter": {
-    "fileName": "reports/mutation/index.html"
-  },
+  "reporters": ["clear-text", "progress", "json"],
   "thresholds": {
     "high": 90,
     "low": 80,
