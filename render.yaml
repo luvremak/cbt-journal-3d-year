@@ -1,0 +1,34 @@
+# Стейдж на Render: Dashboard → New → Blueprint → цей репозиторій.
+# Деплой автоматичний, але лише коли CI на main зелений (autoDeployTrigger: checksPass).
+services:
+  - type: web
+    name: cbt-journal-staging
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    autoDeployTrigger: checksPass
+    buildCommand: npm ci --include=dev && npm run build
+    # Міграції (без простою, standards/migrations.md) → seed тестових користувачів → сервер.
+    startCommand: npm run start:staging
+    # Render перемикає трафік на нову версію лише після 200 на /health (перевіряє і БД).
+    healthCheckPath: /health
+    envVars:
+      - key: STORAGE
+        value: postgres
+      - key: APP_ENV
+        value: staging
+      - key: LOG_LEVEL
+        value: info
+      - key: DATABASE_URL
+        fromDatabase:
+          name: cbt-journal-staging-db
+          property: connectionString
+
+databases:
+  - name: cbt-journal-staging-db
+    plan: free
+    region: frankfurt
+    postgresMajorVersion: '17'
+    databaseName: cbt
+    user: cbt

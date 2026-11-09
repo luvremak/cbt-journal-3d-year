@@ -16,6 +16,7 @@ export function createApp(container: Container): Express {
   const users = container.resolve(TOKENS.userService);
   const entries = container.resolve(TOKENS.entryService);
   const notes = container.resolve(TOKENS.noteService);
+  const system = container.resolve(TOKENS.systemService);
 
   const app = express();
   app.disable('x-powered-by');
@@ -24,8 +25,13 @@ export function createApp(container: Container): Express {
   // Stryker disable next-line ObjectLiteral: еквівалентний мутант — типовий ліміт теж 100kb.
   app.use(express.json({ limit: '100kb' }));
 
-  app.get('/health', (_req, res) => {
-    res.json({ status: 'ok' });
+  // Службові ендпоінти — без X-User-Id.
+  app.get('/health', async (_req, res) => {
+    const health = await system.health();
+    res.status(health.status === 'ok' ? 200 : 503).json(health);
+  });
+  app.get('/version', async (_req, res) => {
+    res.json(await system.version());
   });
 
   const client = Router();

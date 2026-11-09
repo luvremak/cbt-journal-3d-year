@@ -84,13 +84,35 @@ describe('business-process context', () => {
 
 describe('loadConfig', () => {
   it('defaults', () => {
-    expect(loadConfig({})).toEqual({ PORT: 3000, LOG_LEVEL: 'info', STORAGE: 'memory' });
+    expect(loadConfig({})).toEqual({
+      PORT: 3000,
+      LOG_LEVEL: 'info',
+      STORAGE: 'memory',
+      APP_ENV: 'local',
+      GIT_COMMIT: 'unknown',
+    });
   });
 
   it('parses values', () => {
     expect(
       loadConfig({ PORT: '8080', LOG_LEVEL: 'debug', STORAGE: 'postgres', DATABASE_URL: 'pg://x' }),
-    ).toEqual({ PORT: 8080, LOG_LEVEL: 'debug', STORAGE: 'postgres', DATABASE_URL: 'pg://x' });
+    ).toEqual({
+      PORT: 8080,
+      LOG_LEVEL: 'debug',
+      STORAGE: 'postgres',
+      DATABASE_URL: 'pg://x',
+      APP_ENV: 'local',
+      GIT_COMMIT: 'unknown',
+    });
+  });
+
+  it('commit: GIT_COMMIT, else RENDER_GIT_COMMIT, else "unknown"', () => {
+    expect(loadConfig({ GIT_COMMIT: 'abc', RENDER_GIT_COMMIT: 'def' }).GIT_COMMIT).toBe('abc');
+    expect(loadConfig({ RENDER_GIT_COMMIT: 'def' }).GIT_COMMIT).toBe('def');
+    expect(loadConfig({ GIT_COMMIT: '', RENDER_GIT_COMMIT: 'def' }).GIT_COMMIT).toBe('def');
+    expect(loadConfig({ GIT_COMMIT: '', RENDER_GIT_COMMIT: '' }).GIT_COMMIT).toBe('unknown');
+    expect(loadConfig({ APP_ENV: 'staging' }).APP_ENV).toBe('staging');
+    expect(() => loadConfig({ APP_ENV: '' })).toThrow();
   });
 
   it.each(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])(

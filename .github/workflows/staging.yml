@@ -1,0 +1,34 @@
+name: Staging smoke
+
+# Після зеленого CI на main Render сам деплоїть (render.yaml: autoDeployTrigger: checksPass).
+# Цей workflow чекає, поки на стейджі з'явиться саме цей коміт, і проганяє smoke-сценарій.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    env:
+      STAGING_URL: ${{ vars.STAGING_URL }}
+      COMMIT: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '22' }
+      - name: Smoke test the staging deploy
+        run: |
+          if [ -z "$STAGING_URL" ]; then
+            echo "::notice::STAGING_URL repository variable is not set yet; skipping."
+            exit 0
+          fi
+          # Безкоштовний Render: збірка + холодний старт можуть зайняти до ~10 хв.
+          if [ -n "$COMMIT" ]; then
+            node scripts/smoke.mjs "$STAGING_URL" --wait 900 --expect-commit "$COMMIT"
+          else
+            node scripts/smoke.mjs "$STAGING_URL" --wait 300
+          fi
