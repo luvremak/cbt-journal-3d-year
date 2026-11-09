@@ -1,3 +1,5 @@
+import type { Page } from '../../lib/pagination.js';
+
 export interface Entry {
   id: string;
   clientId: string;
@@ -18,8 +20,11 @@ export type NewEntry = Pick<
 export interface EntryRepository {
   create(entry: NewEntry): Promise<Entry>;
   findById(id: string): Promise<Entry | null>;
-  /** Записи клієнта від нових до старих (spec §4). */
-  findByClient(clientId: string, options: { includeDeleted: boolean }): Promise<Entry[]>;
+  /** Сторінка записів клієнта: від нових до старих, за однакового часу — за id (spec §4). */
+  findByClient(
+    clientId: string,
+    options: { includeDeleted: boolean; page: Page },
+  ): Promise<Entry[]>;
   /** Позначає запис видаленим, якщо він ще активний. Повертає false, якщо нічого не змінено. */
   softDelete(id: string): Promise<boolean>;
 }

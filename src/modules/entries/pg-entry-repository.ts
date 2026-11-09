@@ -1,4 +1,5 @@
 import type { Pool } from '../../db/pool.js';
+import type { Page } from '../../lib/pagination.js';
 import type { Entry, EntryRepository, NewEntry } from './entry.js';
 
 interface EntryRow {
@@ -37,12 +38,16 @@ export class PgEntryRepository implements EntryRepository {
     return rows[0] ? toEntry(rows[0]) : null;
   }
 
-  async findByClient(clientId: string, options: { includeDeleted: boolean }): Promise<Entry[]> {
+  async findByClient(
+    clientId: string,
+    options: { includeDeleted: boolean; page: Page },
+  ): Promise<Entry[]> {
     const { rows } = await this.pool.query<EntryRow>(
       `SELECT ${COLUMNS} FROM entries
        WHERE client_id = $1 AND ($2 OR deleted_at IS NULL)
-       ORDER BY created_at DESC, id DESC`,
-      [clientId, options.includeDeleted],
+       ORDER BY created_at DESC, id DESC
+       LIMIT $3 OFFSET $4`,
+      [clientId, options.includeDeleted, options.page.limit, options.page.offset],
     );
     return rows.map(toEntry);
   }

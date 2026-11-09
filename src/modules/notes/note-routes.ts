@@ -1,12 +1,13 @@
 import type { Router } from 'express';
 import { currentUser } from '../../http/middleware/auth.js';
 import { parseBody } from '../../http/validate.js';
+import { parsePage } from '../../lib/pagination.js';
 import { createNoteBody, toNoteDto } from './note-schemas.js';
 import type { NoteService } from './note-service.js';
 
 export function mountTherapistNoteRoutes(router: Router, notes: NoteService): void {
   router.get('/entries/:entryId/notes', async (req, res) => {
-    const list = await notes.list(currentUser(res), req.params.entryId);
+    const list = await notes.list(currentUser(res), req.params.entryId, parsePage(req.query));
     res.json(list.map(toNoteDto));
   });
 

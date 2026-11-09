@@ -1,5 +1,6 @@
 import { NotFoundError, UnauthorizedError } from '../../lib/errors.js';
 import type { Logger } from '../../lib/logger.js';
+import type { Page } from '../../lib/pagination.js';
 import { isUuid } from '../../lib/uuid.js';
 import type { User, UserRepository } from './user.js';
 
@@ -40,8 +41,9 @@ export class UserService {
     return toProfile(therapist);
   }
 
-  async listClientsOf(therapist: User): Promise<PublicProfile[]> {
-    const clients = await this.users.findClientsByTherapist(therapist.id);
+  /** spec §2: терапевт бачить ім'я та контакти своїх клієнтів. */
+  async listClientsOf(therapist: User, page: Page): Promise<PublicProfile[]> {
+    const clients = await this.users.findClientsByTherapist(therapist.id, page);
     return clients.map(toProfile);
   }
 

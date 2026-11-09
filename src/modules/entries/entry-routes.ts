@@ -1,6 +1,7 @@
 import type { Router } from 'express';
 import { currentUser } from '../../http/middleware/auth.js';
 import { parseBody } from '../../http/validate.js';
+import { parsePage } from '../../lib/pagination.js';
 import { createEntryBody, toEntryDto, toTherapistEntryDto } from './entry-schemas.js';
 import type { EntryService } from './entry-service.js';
 
@@ -11,8 +12,8 @@ export function mountClientEntryRoutes(router: Router, entries: EntryService): v
     res.status(201).json(toEntryDto(entry));
   });
 
-  router.get('/entries', async (_req, res) => {
-    const list = await entries.listForClient(currentUser(res));
+  router.get('/entries', async (req, res) => {
+    const list = await entries.listForClient(currentUser(res), parsePage(req.query));
     res.json(list.map(toEntryDto));
   });
 
@@ -28,7 +29,11 @@ export function mountClientEntryRoutes(router: Router, entries: EntryService): v
 
 export function mountTherapistEntryRoutes(router: Router, entries: EntryService): void {
   router.get('/clients/:clientId/entries', async (req, res) => {
-    const list = await entries.listForTherapist(currentUser(res), req.params.clientId);
+    const list = await entries.listForTherapist(
+      currentUser(res),
+      req.params.clientId,
+      parsePage(req.query),
+    );
     res.json(list.map(toTherapistEntryDto));
   });
 }

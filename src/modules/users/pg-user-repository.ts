@@ -1,4 +1,5 @@
 import type { Pool } from '../../db/pool.js';
+import type { Page } from '../../lib/pagination.js';
 import type { Role, User, UserRepository } from './user.js';
 
 interface UserRow {
@@ -21,12 +22,13 @@ export class PgUserRepository implements UserRepository {
     return rows[0] ? toUser(rows[0]) : null;
   }
 
-  async findClientsByTherapist(therapistId: string): Promise<User[]> {
+  async findClientsByTherapist(therapistId: string, page: Page): Promise<User[]> {
     const { rows } = await this.pool.query<UserRow>(
       `SELECT ${COLUMNS} FROM users
        WHERE role = 'client' AND therapist_id = $1
-       ORDER BY name, id`,
-      [therapistId],
+       ORDER BY name COLLATE "C", id
+       LIMIT $2 OFFSET $3`,
+      [therapistId, page.limit, page.offset],
     );
     return rows.map(toUser);
   }

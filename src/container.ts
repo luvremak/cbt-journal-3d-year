@@ -60,7 +60,9 @@ function registerPostgresRepositories(c: Container, config: Config): void {
 }
 
 function registerInMemoryRepositories(c: Container): void {
+  // Одне сховище записів і для EntryRepository, і для атомарної перевірки в нотатках.
+  const entries = new InMemoryEntryRepository(SEED_ENTRIES);
   c.register(TOKENS.userRepository, () => new InMemoryUserRepository(SEED_USERS));
-  c.register(TOKENS.entryRepository, () => new InMemoryEntryRepository(SEED_ENTRIES));
-  c.register(TOKENS.noteRepository, () => new InMemoryNoteRepository(SEED_NOTES));
+  c.registerValue(TOKENS.entryRepository, entries);
+  c.register(TOKENS.noteRepository, () => new InMemoryNoteRepository(entries, SEED_NOTES));
 }

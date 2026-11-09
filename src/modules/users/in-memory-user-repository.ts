@@ -1,3 +1,4 @@
+import { slicePage, type Page } from '../../lib/pagination.js';
 import type { User, UserRepository } from './user.js';
 
 export class InMemoryUserRepository implements UserRepository {
@@ -12,10 +13,10 @@ export class InMemoryUserRepository implements UserRepository {
     return user ? { ...user } : null;
   }
 
-  async findClientsByTherapist(therapistId: string): Promise<User[]> {
-    return [...this.users.values()]
+  async findClientsByTherapist(therapistId: string, page: Page): Promise<User[]> {
+    const clients = [...this.users.values()]
       .filter((u) => u.role === 'client' && u.therapistId === therapistId)
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map((u) => ({ ...u }));
+      .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : a.id < b.id ? -1 : 1));
+    return slicePage(clients, page).map((u) => ({ ...u }));
   }
 }

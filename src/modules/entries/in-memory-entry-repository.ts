@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { compareNewestFirst, slicePage, type Page } from '../../lib/pagination.js';
 import type { Entry, EntryRepository, NewEntry } from './entry.js';
 
 export class InMemoryEntryRepository implements EntryRepository {
@@ -19,18 +20,20 @@ export class InMemoryEntryRepository implements EntryRepository {
     return entry ? clone(entry) : null;
   }
 
-  async findByClient(clientId: string, options: { includeDeleted: boolean }): Promise<Entry[]> {
-    return (
-      this.entries
-        .map((entry, index) => ({ entry, index }))
-        .filter(({ entry }) => entry.clientId === clientId)
-        .filter(({ entry }) => options.includeDeleted || entry.deletedAt === null)
-        // Від нових до старих; за однакового часу — пізніше доданий вище.
-        .sort(
-          (a, b) => b.entry.createdAt.getTime() - a.entry.createdAt.getTime() || b.index - a.index,
-        )
-        .map(({ entry }) => clone(entry))
-    );
+  async findByClient(
+    clientId: string,
+    options: { includeDeleted: boolean; page: Page },
+  ): Promise<Entry[]> {
+    const entries = this.entries
+      .filter((e) => e.clientId === clientId)
+      .filter((e) => options.includeDeleted || e.deletedAt === null)
+      .sort(compareNewestFirst);
+    return slicePage(entries, options.page).map(clone);
+  }
+
+  /** Синхронна перевірка — щоб нотатка створювалась атомарно (без await між перевіркою і вставкою). */
+  isActive(id: string): boolean {
+    return this.entries.some((e) => e.id === id && e.deletedAt === null);
   }
 
   async softDelete(id: string): Promise<boolean> {

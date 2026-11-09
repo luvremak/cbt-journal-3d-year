@@ -1,5 +1,6 @@
 import { NotFoundError } from '../../lib/errors.js';
 import type { Logger } from '../../lib/logger.js';
+import type { Page } from '../../lib/pagination.js';
 import { isUuid } from '../../lib/uuid.js';
 import type { User } from '../users/user.js';
 import type { UserService } from '../users/user-service.js';
@@ -20,8 +21,8 @@ export class EntryService {
   }
 
   /** Лише активні записи клієнта (spec §4, soft delete). */
-  async listForClient(client: User): Promise<Entry[]> {
-    return this.entries.findByClient(client.id, { includeDeleted: false });
+  async listForClient(client: User, page: Page): Promise<Entry[]> {
+    return this.entries.findByClient(client.id, { includeDeleted: false, page });
   }
 
   /** Власний активний запис; чужий, видалений або неіснуючий → 404. */
@@ -45,9 +46,9 @@ export class EntryService {
   }
 
   /** Усі записи клієнта терапевта, включно з видаленими (їх ховає шар відповіді). */
-  async listForTherapist(therapist: User, clientId: string): Promise<Entry[]> {
+  async listForTherapist(therapist: User, clientId: string, page: Page): Promise<Entry[]> {
     const client = await this.users.getOwnClient(therapist, clientId);
-    return this.entries.findByClient(client.id, { includeDeleted: true });
+    return this.entries.findByClient(client.id, { includeDeleted: true, page });
   }
 
   /** Запис клієнта цього терапевта (активний чи видалений); інакше → 404. */

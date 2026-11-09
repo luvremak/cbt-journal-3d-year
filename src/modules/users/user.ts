@@ -1,3 +1,5 @@
+import type { Page } from '../../lib/pagination.js';
+
 export type Role = 'client' | 'therapist';
 
 export interface User {
@@ -11,6 +13,6 @@ export interface User {
 
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
-  /** Клієнти терапевта, відсортовані за ім'ям. */
-  findClientsByTherapist(therapistId: string): Promise<User[]>;
+  /** Клієнти терапевта, відсортовані за ім'ям (за однакового — за id). */
+  findClientsByTherapist(therapistId: string, page: Page): Promise<User[]>;
 }
