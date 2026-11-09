@@ -15,6 +15,9 @@ const server = app.listen(config.PORT, () => {
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
     logger.info({ signal }, 'shutting down');
-    server.close(() => process.exit(0));
+    server.close(async () => {
+      if (container.has(TOKENS.pool)) await container.resolve(TOKENS.pool).end();
+      process.exit(0);
+    });
   });
 }

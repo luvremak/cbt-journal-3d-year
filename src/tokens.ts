@@ -1,4 +1,5 @@
 import type { Config } from './config.js';
+import type { Pool } from './db/pool.js';
 import { createToken } from './lib/di/container.js';
 import type { Logger } from './lib/logger.js';
 import type { EntryRepository } from './modules/entries/entry.js';
@@ -12,6 +13,7 @@ import type { UserService } from './modules/users/user-service.js';
 export const TOKENS = {
   config: createToken<Config>('config'),
   logger: createToken<Logger>('logger'),
+  pool: createToken<Pool>('pool'),
   userRepository: createToken<UserRepository>('userRepository'),
   entryRepository: createToken<EntryRepository>('entryRepository'),
   noteRepository: createToken<NoteRepository>('noteRepository'),

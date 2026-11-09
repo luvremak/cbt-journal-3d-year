@@ -1,4 +1,8 @@
 import type { Config } from './config.js';
+import { createPool } from './db/pool.js';
+import { PgEntryRepository } from './modules/entries/pg-entry-repository.js';
+import { PgNoteRepository } from './modules/notes/pg-note-repository.js';
+import { PgUserRepository } from './modules/users/pg-user-repository.js';
 import { Container } from './lib/di/container.js';
 import { createLogger } from './lib/logger.js';
 import { EntryService } from './modules/entries/entry-service.js';
@@ -16,7 +20,11 @@ export function buildContainer(config: Config): Container {
   c.registerValue(TOKENS.config, config);
   c.register(TOKENS.logger, () => createLogger(config.LOG_LEVEL));
 
-  registerInMemoryRepositories(c);
+  if (config.STORAGE === 'postgres') {
+    registerPostgresRepositories(c, config);
+  } else {
+    registerInMemoryRepositories(c);
+  }
 
   c.register(
     TOKENS.userService,
@@ -41,6 +49,14 @@ export function buildContainer(config: Config): Container {
       ),
   );
   return c;
+}
+
+function registerPostgresRepositories(c: Container, config: Config): void {
+  // config.refine гарантує DATABASE_URL для STORAGE=postgres.
+  c.register(TOKENS.pool, () => createPool(config.DATABASE_URL ?? ''));
+  c.register(TOKENS.userRepository, (c) => new PgUserRepository(c.resolve(TOKENS.pool)));
+  c.register(TOKENS.entryRepository, (c) => new PgEntryRepository(c.resolve(TOKENS.pool)));
+  c.register(TOKENS.noteRepository, (c) => new PgNoteRepository(c.resolve(TOKENS.pool)));
 }
 
 function registerInMemoryRepositories(c: Container): void {
