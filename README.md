@@ -92,14 +92,15 @@ push / PR ──► GitHub Actions (CI) ──► зелений main ──► 
 
 - **CI** (`.github/workflows/ci.yml`): типи, лінтер, формат; усі тести на PostgreSQL 17; Stryker; SQL-мутанти; `compat` — стара версія на новій схемі (міграції без простою, [standards/migrations.md](standards/migrations.md)); звіт якості як артефакт `quality-report`.
 - **CD** (`render.yaml`): безкоштовний вебсервіс і PostgreSQL на Render. Деплой лише з `main` і лише після зелених перевірок. Секретів у GitHub немає: `DATABASE_URL` Render підставляє сам.
-- **Після деплою** (`.github/workflows/staging.yml`): чекає, поки `GET /version` покаже новий коміт, і проганяє `scripts/smoke.mjs` проти стейджу. Потрібна змінна репозиторію `STAGING_URL`.
+- **Після деплою** (`.github/workflows/staging.yml`): чекає, поки `GET /version` покаже новий коміт, і проганяє `scripts/smoke.mjs` проти стейджу.
+- **Стейдж:** https://cbt-journal-staging.onrender.com (`/version`, `/health`).
 - **`GET /version`** — версія, коміт, оточення, остання застосована міграція. **`GET /health`** — 200 лише коли є з'єднання з БД.
 
 ### Як підняти стейдж (один раз)
 
 1. [dashboard.render.com](https://dashboard.render.com) → увійти через GitHub.
 2. **New → Blueprint** → вибрати `luvremak/cbt-journal-3d-year` → **Apply**. Render створить базу і сервіс із `render.yaml`.
-3. Скопіювати адресу сервісу (`https://cbt-journal-staging….onrender.com`) і додати її в GitHub: **Settings → Secrets and variables → Actions → Variables → New variable** `STAGING_URL`.
+3. Якщо Render дав іншу адресу, ніж `https://cbt-journal-staging.onrender.com`, додати її в GitHub: **Settings → Secrets and variables → Actions → Variables** `STAGING_URL`.
 
 ### Обмеження безкоштовного тарифу
 
