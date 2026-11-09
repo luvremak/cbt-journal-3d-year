@@ -52,8 +52,10 @@ export function buildContainer(config: Config): Container {
 }
 
 function registerPostgresRepositories(c: Container, config: Config): void {
-  // config.refine гарантує DATABASE_URL для STORAGE=postgres.
-  c.register(TOKENS.pool, () => createPool(config.DATABASE_URL ?? ''));
+  const url = config.DATABASE_URL;
+  // loadConfig уже це перевіряє; захист на випадок конфігу, зібраного вручну.
+  if (!url) throw new Error('DATABASE_URL is required when STORAGE=postgres');
+  c.register(TOKENS.pool, () => createPool(url));
   c.register(TOKENS.userRepository, (c) => new PgUserRepository(c.resolve(TOKENS.pool)));
   c.register(TOKENS.entryRepository, (c) => new PgEntryRepository(c.resolve(TOKENS.pool)));
   c.register(TOKENS.noteRepository, (c) => new PgNoteRepository(c.resolve(TOKENS.pool)));

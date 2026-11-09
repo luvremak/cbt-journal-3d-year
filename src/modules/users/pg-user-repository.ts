@@ -26,7 +26,7 @@ export class PgUserRepository implements UserRepository {
     const { rows } = await this.pool.query<UserRow>(
       `SELECT ${COLUMNS} FROM users
        WHERE role = 'client' AND therapist_id = $1
-       ORDER BY name COLLATE "C", id
+       ORDER BY name COLLATE uk_ci, id
        LIMIT $2 OFFSET $3`,
       [therapistId, page.limit, page.offset],
     );

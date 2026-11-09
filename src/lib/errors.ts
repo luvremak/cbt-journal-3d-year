@@ -39,7 +39,24 @@ export class ConflictError extends AppError {
   readonly code = 'CONFLICT';
 }
 
+export interface FieldIssue {
+  field: string;
+  message: string;
+}
+
 export class ValidationError extends AppError {
   readonly status = 422;
   readonly code = 'VALIDATION_ERROR';
+
+  /** Із помилки zod: поле (шлях через крапку) і повідомлення. */
+  static fromIssues(
+    message: string,
+    issues: readonly { path: readonly PropertyKey[]; message: string }[],
+  ): ValidationError {
+    const details: FieldIssue[] = issues.map((i) => ({
+      field: i.path.map(String).join('.'),
+      message: i.message,
+    }));
+    return new ValidationError(message, details);
+  }
 }

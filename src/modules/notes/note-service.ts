@@ -14,19 +14,16 @@ export class NoteService {
 
   /** spec §4: лише терапевт автора запису (інакше 404); до видаленого запису → 409, атомарно. */
   async create(therapist: User, entryId: string, text: string): Promise<Note> {
-    // Права доступу (404). Видалення тут лише швидка відмова: остаточне рішення
-    // ухвалює атомарна вставка нижче, бо запис можуть видалити саме зараз.
+    // Права доступу (404). Чи видалено запис — вирішує лише атомарна вставка,
+    // бо запис можуть видаляти саме зараз.
     const entry = await this.entries.getForTherapist(therapist, entryId);
-    if (entry.deletedAt !== null) {
-      throw new ConflictError('Cannot add a note to a deleted entry');
-    }
     const note = await this.notes.createIfEntryActive({
       entryId: entry.id,
       therapistId: therapist.id,
       text,
     });
     if (!note) {
-      this.logger.info({ entryId: entry.id }, 'note rejected: entry deleted concurrently');
+      this.logger.info({ entryId: entry.id }, 'note rejected: entry is deleted');
       throw new ConflictError('Cannot add a note to a deleted entry');
     }
     this.logger.info({ noteId: note.id, entryId: entry.id }, 'note created');

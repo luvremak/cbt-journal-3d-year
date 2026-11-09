@@ -5,7 +5,7 @@ import type { Entry, EntryRepository, NewEntry } from './entry.js';
 export class InMemoryEntryRepository implements EntryRepository {
   private readonly entries: Entry[];
 
-  constructor(seed: readonly Entry[] = []) {
+  constructor(seed: readonly Entry[]) {
     this.entries = seed.map(clone);
   }
 

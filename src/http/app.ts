@@ -20,6 +20,8 @@ export function createApp(container: Container): Express {
   const app = express();
   app.disable('x-powered-by');
   app.use(businessProcess(logger));
+  // Явний ліміт тіла (збігається з типовим у Express): 4 поля × 5000 символів уміщуються.
+  // Stryker disable next-line ObjectLiteral: еквівалентний мутант — типовий ліміт теж 100kb.
   app.use(express.json({ limit: '100kb' }));
 
   app.get('/health', (_req, res) => {

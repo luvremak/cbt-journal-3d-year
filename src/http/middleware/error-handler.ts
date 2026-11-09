@@ -23,7 +23,8 @@ export function errorHandler(logger: Logger): ErrorRequestHandler {
     const bpId = getBusinessProcess()?.bpId ?? res.getHeader('X-Business-Process-Id');
     const send = (status: number, code: string, message: string, details?: unknown) => {
       res.status(status).json({
-        error: details === undefined ? { code, message } : { code, message, details },
+        // details: undefined у JSON не потрапляє.
+        error: { code, message, details },
         bp_id: bpId,
       });
     };

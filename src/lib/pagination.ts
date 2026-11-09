@@ -21,10 +21,7 @@ const schema = z.object({
 export function parsePage(query: Record<string, unknown>): Page {
   const result = schema.safeParse({ limit: query.limit, offset: query.offset });
   if (!result.success) {
-    throw new ValidationError(
-      'Invalid pagination parameters',
-      result.error.issues.map((i) => ({ field: i.path.join('.'), message: i.message })),
-    );
+    throw ValidationError.fromIssues('Invalid pagination parameters', result.error.issues);
   }
   return { limit: result.data.limit ?? DEFAULT_LIMIT, offset: result.data.offset ?? 0 };
 }

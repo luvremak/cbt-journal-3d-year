@@ -81,9 +81,25 @@ routes → services → repositories → PostgreSQL / пам'ять
 - **Помилки:** сервіси кидають доменні помилки (`src/lib/errors.ts`), глобальний обробник перетворює їх на HTTP-коди за spec.
 - **Міграції:** `migrations/*.sql`, застосовуються `npm run db:migrate` і запам'ятовуються в `schema_migrations`.
 
+## Тести
+
+```bash
+make db-up          # PostgreSQL потрібен для повного прогону
+make test           # 309 тестів: unit + інтеграційні + E2E (memory і PostgreSQL)
+make test-nodb      # без БД (unit + in-memory частина)
+make coverage       # покриття → консоль і reports/coverage/
+make mutation       # Stryker (поріг 80 %, зараз 100 %) → reports/index.html
+make mutation-sql   # мутанти SQL-умов із test/sql-mutants.tsv (зараз 13/13)
+make report         # усе разом → reports/index.html
+```
+
+`reports/index.html` — звіт якості однією сторінкою: вердикт, кожен мутант як клітинка, що виправити, тести за рівнями, покриття, мутації за файлами з тестом, який впіймав кожну зміну, і SQL-умови. Шрифти вбудовані, тож файл відкривається без інтернету.
+
+Тестова база — `cbt_test` у тому ж PostgreSQL (змінна `TEST_DATABASE_URL`); схема перестворюється на кожен прогін. Правила — у [standards/testing.md](standards/testing.md).
+
 ## Git-hooks
 
-- **pre-commit:** lint-staged (ESLint + Prettier на змінених файлах) і `typecheck`.
+- **pre-commit:** lint-staged (ESLint + Prettier на змінених файлах), `typecheck` і unit-тести.
 - **commit-msg:** commitlint — повідомлення коміту має бути у форматі Conventional Commits (`feat: …`, `fix: …`, `docs: …`).
 
 ## Структура репозиторію
@@ -91,7 +107,9 @@ routes → services → repositories → PostgreSQL / пам'ять
 ```
 src/          код застосунку
 migrations/   SQL-міграції
-standards/    правила розробки (код, git, архітектура)
+standards/    правила розробки (код, git, тести)
+test/         unit/, integration/, e2e/, helpers/
+scripts/      допоміжні скрипти (мутації SQL)
 ai/           слід роботи з AI: питання й відповіді дослівно
 audit/        аудити по завданнях (топ-3 знахідки)
 spec.md       специфікація: ролі, модулі, бізнес-правила, ER

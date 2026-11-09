@@ -13,6 +13,6 @@ export interface User {
 
 export interface UserRepository {
   findById(id: string): Promise<User | null>;
-  /** Клієнти терапевта, відсортовані за ім'ям (за однакового — за id). */
+  /** Клієнти терапевта: за ім'ям українською абеткою без урахування регістру, далі за id (spec §4). */
   findClientsByTherapist(therapistId: string, page: Page): Promise<User[]>;
 }
