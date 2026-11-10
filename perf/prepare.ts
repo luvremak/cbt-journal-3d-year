@@ -4,8 +4,10 @@
  * --migrations — каталог міграцій іншої версії (щоб заміряти «до» на її схемі).
  *
  * Обсяг (детермінований, щоб прогони можна було порівнювати):
- *   20 терапевтів × 25 клієнтів = 500 клієнтів, по 200 записів (~100 тис.);
- *   «важкий» клієнт Максим: 2000 записів за рік, 10 % видалені; нотатки до кожного 10-го запису.
+ *   20 терапевтів × 25 клієнтів = 500 клієнтів, по 140 записів (70 тис.);
+ *   «важкий» клієнт Максим: 2000 записів за рік, 10 % видалені;
+ *   клієнт для сценарію DELETE: 30 тис. записів, які видаляються по одному;
+ *   разом ~102 тис. записів; нотатки до кожного 10-го запису.
  */
 import pg from 'pg';
 import { migrate } from '../src/db/migrate.js';
@@ -53,6 +55,12 @@ async function main(): Promise<void> {
       [PERF.clientsPerTherapist],
     );
 
+    await pool.query(
+      `INSERT INTO users (id, role, name, contacts, therapist_id)
+       VALUES ($1, 'client', 'Клієнт для видалень', 'd@example.com', $2)`,
+      [PERF.deleteClient, PERF.therapist],
+    );
+
     // Записи всіх клієнтів одним INSERT у порядку часу: як у живій системі, записи
     // різних клієнтів перемішані на диску (інакше записи клієнта лежали б поруч,
     // і будь-який запит «за клієнтом» виглядав би нереально дешевим).
@@ -74,9 +82,19 @@ async function main(): Promise<void> {
                 now() - (i * interval '4 hours 22 minutes'),
                 CASE WHEN i % 10 = 0 THEN now() - (i * interval '4 hours') END
          FROM generate_series(1, $3) i
+         UNION ALL
+         -- клієнт для сценарію DELETE
+         SELECT $4::uuid, 'страх', NULL, now() - random() * interval '365 days', NULL
+         FROM generate_series(1, $5)
        ) generated
        ORDER BY created_at`,
-      [PERF.entriesPerClient, PERF.heavyClient, PERF.heavyClientEntries],
+      [
+        PERF.entriesPerClient,
+        PERF.heavyClient,
+        PERF.heavyClientEntries,
+        PERF.deleteClient,
+        PERF.deleteClientEntries,
+      ],
     );
 
     // Нотатки терапевтів до кожного 10-го запису.

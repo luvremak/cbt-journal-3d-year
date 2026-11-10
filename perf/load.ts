@@ -3,6 +3,7 @@
  * і проганяє сценарії autocannon. Результат — reports/perf.json і таблиця в консоль.
  *   PERF_DATABASE_URL=... npx tsx perf/load.ts [--duration 10] [--connections 20] [--repeat 3]
  *                                              [--label baseline] [--app <каталог зі збіркою>]
+ * --only <текст>      лише сценарії, у назві яких є цей текст
  * --budget-p99 <мс>   код виходу 1, якщо p99 будь-якого сценарію більший або є помилки (CI).
  * Кожен сценарій: прогрів 2 с, потім --repeat прогонів; у звіт іде медіана
  * (на спільних 2 ядрах один прогін шумить на ±15 %).
@@ -24,6 +25,7 @@ const label = opt('--label', 'run');
 const repeat = Number(opt('--repeat', '3'));
 const appDir = opt('--app', '.');
 const output = opt('--out', 'reports/perf.json');
+const only = opt('--only', '');
 const budgetP99 = args.includes('--budget-p99') ? Number(opt('--budget-p99', '0')) : null;
 const url = process.env.PERF_DATABASE_URL;
 if (!url) throw new Error('PERF_DATABASE_URL is required');
@@ -32,25 +34,46 @@ const base = `http://localhost:${PORT}`;
 
 interface Scenario {
   name: string;
-  method: 'GET' | 'POST';
+  method: 'GET' | 'POST' | 'DELETE';
   path: string;
-  user: string;
+  user?: string;
   body?: string;
+  /** Для DELETE: кожен запит — наступний id із цього списку; міряємо кількістю запитів. */
+  ids?: string[];
 }
 
+/** Усі ендпоінти API (spec §7: p99 кожного ендпоінта ≤ бюджету). */
 async function scenarios(): Promise<Scenario[]> {
   const db = new pg.Client({ connectionString: url });
   await db.connect();
-  const entry = await db.query<{ id: string }>(
+  const withNotes = await db.query<{ id: string }>(
     `SELECT e.id FROM entries e JOIN therapist_notes n ON n.entry_id = e.id
      WHERE e.client_id = $1 GROUP BY e.id ORDER BY count(*) DESC, e.id LIMIT 1`,
     [PERF.heavyClient],
   );
+  const active = await db.query<{ id: string }>(
+    `SELECT id FROM entries WHERE client_id = $1 AND deleted_at IS NULL
+     ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [PERF.heavyClient],
+  );
+  const toDelete = await db.query<{ id: string }>(
+    'SELECT id FROM entries WHERE client_id = $1 AND deleted_at IS NULL ORDER BY id',
+    [PERF.deleteClient],
+  );
   await db.end();
-  const entryWithNotes = entry.rows[0]?.id;
   const c = PERF.heavyClient;
   const t = PERF.therapist;
+  const entryWithNotes = withNotes.rows[0]?.id;
+  const activeEntry = active.rows[0]?.id;
+  const entryBody = JSON.stringify({
+    situation: 'Навантаження',
+    thought: 'Думка',
+    emotion: 'тривога',
+    emotion_intensity: 40,
+  });
   return [
+    { name: 'Службове: /health', method: 'GET', path: '/health' },
+    { name: 'Службове: /version', method: 'GET', path: '/version' },
     { name: 'Клієнт: свої записи, 1-ша сторінка', method: 'GET', path: '/client/entries', user: c },
     {
       name: 'Клієнт: свої записи, глибока сторінка',
@@ -58,13 +81,29 @@ async function scenarios(): Promise<Scenario[]> {
       path: '/client/entries?limit=50&offset=1500',
       user: c,
     },
+    { name: 'Клієнт: один запис', method: 'GET', path: `/client/entries/${activeEntry}`, user: c },
+    { name: 'Клієнт: свій терапевт', method: 'GET', path: '/client/therapist', user: c },
+    {
+      name: 'Клієнт: новий запис',
+      method: 'POST',
+      path: '/client/entries',
+      user: c,
+      body: entryBody,
+    },
+    {
+      name: 'Клієнт: видалення запису',
+      method: 'DELETE',
+      path: '/client/entries/:id',
+      user: PERF.deleteClient,
+      ids: toDelete.rows.map((r) => r.id),
+    },
+    { name: 'Терапевт: список клієнтів', method: 'GET', path: '/therapist/clients', user: t },
     {
       name: 'Терапевт: записи клієнта',
       method: 'GET',
       path: `/therapist/clients/${c}/entries`,
       user: t,
     },
-    { name: 'Терапевт: список клієнтів', method: 'GET', path: '/therapist/clients', user: t },
     {
       name: 'Терапевт: нотатки до запису',
       method: 'GET',
@@ -72,16 +111,11 @@ async function scenarios(): Promise<Scenario[]> {
       user: t,
     },
     {
-      name: 'Клієнт: новий запис',
+      name: 'Терапевт: нова нотатка',
       method: 'POST',
-      path: '/client/entries',
-      user: c,
-      body: JSON.stringify({
-        situation: 'Навантаження',
-        thought: 'Думка',
-        emotion: 'тривога',
-        emotion_intensity: 40,
-      }),
+      path: `/therapist/entries/${activeEntry}/notes`,
+      user: t,
+      body: JSON.stringify({ text: 'Нотатка під навантаженням' }),
     },
   ];
 }
@@ -118,25 +152,55 @@ const server = spawn('node', ['dist/index.js'], {
 try {
   await waitForHealth();
   const results = [];
-  for (const s of await scenarios()) {
-    const run = (seconds: number) =>
-      autocannon({
+  for (const s of (await scenarios()).filter((x) => x.name.includes(only))) {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (s.user) headers['X-User-Id'] = s.user;
+    const ids = s.ids ?? [];
+    let next = 0;
+    // Час прогону міряємо самі: autocannon округлює duration до секунд
+    // (8000 DELETE за 4,6 с показував як «4 с» і 2000 rps).
+    const run = async (seconds: number, amount?: number) => {
+      const started = performance.now();
+      const result = await autocannon({
         url: `${base}${s.path}`,
         method: s.method,
-        headers: { 'X-User-Id': s.user, 'Content-Type': 'application/json' },
+        headers,
         body: s.body,
         connections,
-        duration: seconds,
+        ...(s.ids
+          ? {
+              amount,
+              requests: [
+                {
+                  setupRequest: (req) => ({ ...req, path: `/client/entries/${ids[next++]}` }),
+                },
+              ],
+            }
+          : { duration: seconds }),
       });
-    await run(2); // прогрів: JIT, пул з'єднань, кеш сторінок PostgreSQL
+      return { ...result, elapsedSeconds: (performance.now() - started) / 1000 };
+    };
+    const needed = PERF.deleteWarmupRequests + repeat * PERF.deleteRequestsPerRun;
+    if (s.ids && ids.length < needed) {
+      throw new Error(`DELETE scenario needs ${needed} entries, prepared ${ids.length}`);
+    }
+    // Прогрів: JIT, пул з'єднань, кеш сторінок PostgreSQL.
+    await run(2, PERF.deleteWarmupRequests);
     const runs = [];
-    for (let i = 0; i < repeat; i++) runs.push(await run(duration));
+    for (let i = 0; i < repeat; i++) runs.push(await run(duration, PERF.deleteRequestsPerRun));
+    if (process.env.PERF_DEBUG) {
+      for (const r of runs) {
+        process.stderr.write(
+          `${s.name}: total=${r.requests.total} elapsed=${r.elapsedSeconds.toFixed(2)}s non2xx=${r.non2xx}\n`,
+        );
+      }
+    }
     const errors = runs.reduce((a, r) => a + r.errors + r.non2xx, 0);
     results.push({
       name: s.name,
       method: s.method,
       path: s.path,
-      rps: Math.round(median(runs.map((r) => r.requests.average))),
+      rps: Math.round(median(runs.map((r) => r.requests.total / r.elapsedSeconds))),
       p50: median(runs.map((r) => r.latency.p50)),
       p90: median(runs.map((r) => r.latency.p90)),
       p99: median(runs.map((r) => r.latency.p99)),
