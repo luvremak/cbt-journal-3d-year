@@ -106,6 +106,9 @@ async function main(): Promise<void> {
        WHERE e.rn % 10 = 0`,
     );
     await pool.query('VACUUM ANALYZE');
+    // Скинути на диск усе після масового завантаження, щоб контрольна точка не
+    // збіглася з заміром і не дала хвости латентності на запис (CI, audit/task-5.md).
+    await pool.query('CHECKPOINT');
 
     const { rows } = await pool.query<{ users: string; entries: string; notes: string }>(
       `SELECT (SELECT count(*) FROM users) users, (SELECT count(*) FROM entries) entries,
