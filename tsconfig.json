@@ -20,6 +20,7 @@
     "packages/*/test",
     "vitest.config.ts",
     "vitest.nodb.config.ts",
-    "packages/*/vitest.config.ts"
+    "packages/*/vitest.config.ts",
+    "perf"
   ]
 }

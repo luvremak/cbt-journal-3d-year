@@ -9,6 +9,7 @@
  *   reports/coverage/coverage-summary.json — vitest coverage, json-summary
  *   reports/mutation/mutation.json  — Stryker json reporter
  *   reports/sql-mutation.json       — scripts/sql-mutation.sh
+ *   reports/perf.json (+ perf-before.json) — perf/load.ts
  * Результат: reports/index.html
  */
 import { execSync } from 'node:child_process';
@@ -38,6 +39,8 @@ function mergeMutation(app, lib, prefix) {
   };
 }
 const sql = readJson('reports/sql-mutation.json');
+const perf = readJson('reports/perf.json');
+const perfBefore = readJson('reports/perf-before.json');
 
 // ---------- helpers ----------
 
@@ -427,6 +430,51 @@ function sqlSection(s) {
   </section>`;
 }
 
+function perfSection(p, before) {
+  const budget = p.budgetP99;
+  const prev = new Map((before?.results ?? []).map((r) => [r.name, r]));
+  const scale = Math.max(
+    budget ?? 0,
+    ...p.results.map((r) => r.p99),
+    ...[...prev.values()].map((r) => r.p99),
+  );
+  const rows = p.results
+    .map((r) => {
+      const b = prev.get(r.name);
+      const change = b ? Math.round(((r.rps - b.rps) / b.rps) * 100) : null;
+      const over = budget !== null && r.p99 > budget;
+      return `<tr class="${over || r.errors > 0 ? 'survived' : ''}">
+        <td>${esc(r.name)}</td>
+        <td class="numc">${num(r.rps)}${
+          change === null
+            ? ''
+            : ` <span class="delta ${change >= 5 ? 'up' : change <= -5 ? 'down' : ''}">${num(`${change > 0 ? '+' : ''}${change}\u202f%`)}</span>`
+        }</td>
+        <td class="numc">${num(r.p50)}</td>
+        <td class="numc">${b ? `<span class="was">${num(b.p99)}</span> ` : ''}${num(r.p99)}</td>
+        <td class="p99bar"><span class="bar"><span style="width:${(r.p99 / scale) * 100}%"></span></span>${
+          budget !== null ? `<i class="budget" style="left:${(budget / scale) * 100}%"></i>` : ''
+        }</td>
+        <td class="numc ${r.errors > 0 ? 'bad' : 'zero'}">${num(r.errors)}</td>
+      </tr>`;
+    })
+    .join('');
+  const intro =
+    `${num(p.connections)} одночасних з'єднань, медіана ${num(p.repeat ?? 1)} прогонів по ${num(p.duration)}\u202fс на сценарій, ` +
+    `${num(p.cpus)} ${plural(p.cpus, ['ядро', 'ядра', 'ядер'])} на застосунок, PostgreSQL і генератор навантаження разом.` +
+    (budget !== null ? ` Бюджет p99 — ${num(`${budget}\u202fмс`)}.` : '') +
+    (before ? ` Сірим — p99 до оптимізацій (${esc(before.label)}).` : '');
+  return `
+  <section class="perf" aria-labelledby="perf-h">
+    <h2 id="perf-h">Перформанс</h2>
+    <p class="hint">${intro}</p>
+    <table class="mutants perft">
+      <thead><tr><th>Сценарій</th><th class="numc">Запитів/с</th><th class="numc">p50, мс</th><th class="numc">p99, мс</th><th></th><th class="numc">Помилки</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </section>`;
+}
+
 // ---------- page ----------
 
 const t = summarizeTests();
@@ -555,6 +603,14 @@ tr.survived td, tr.nocov td{background:rgba(226,87,76,.06)}
 .diff{white-space:pre-wrap; word-break:break-word; color:var(--muted)}
 .diff del{text-decoration:line-through; text-decoration-color:rgba(226,87,76,.8); color:#E8A39C; background:rgba(226,87,76,.10); border-radius:2px; padding:0 2px}
 .diff ins{text-decoration:none; color:var(--paper); background:rgba(111,183,164,.16); border-radius:2px; padding:0 2px; margin-left:3px}
+table.perft td, table.perft th{vertical-align:middle}
+table.perft .numc{text-align:right; white-space:nowrap}
+table.perft .was{color:var(--slate); text-decoration:line-through; text-decoration-color:rgba(143,168,166,.5)}
+table.perft .delta{font-size:.8rem; color:var(--muted)}
+table.perft .delta.up{color:var(--sage)} table.perft .delta.down{color:var(--cinnabar)}
+table.perft .p99bar{position:relative; width:180px}
+table.perft .p99bar .bar > span{background:linear-gradient(90deg, rgba(217,180,90,.35), var(--brass))}
+table.perft .budget{position:absolute; top:8px; bottom:8px; width:1px; background:var(--cinnabar); opacity:.7}
 footer{margin-top:80px; padding-top:20px; border-top:1px solid var(--hair); color:var(--muted); font-size:.92rem; display:flex; justify-content:space-between; gap:24px; flex-wrap:wrap}
 footer code{color:var(--paper)}
 @keyframes pop{from{opacity:0; transform:scale(.4)} to{opacity:1; transform:none}}
@@ -603,10 +659,11 @@ const html = `<!DOCTYPE html>
   ${coverage ? coverageSection(coverage) : ''}
   ${m ? filesSection(m) : ''}
   ${sql ? sqlSection(sql) : ''}
+  ${perf ? perfSection(perf, perfBefore) : ''}
 
   <footer>
     <span>Оновити звіт: <code>make report</code></span>
-    <span>Джерела: Vitest, V8 coverage, Stryker, <code>scripts/sql-mutation.sh</code></span>
+    <span>Джерела: Vitest, V8 coverage, Stryker, <code>scripts/sql-mutation.sh</code>, autocannon</span>
   </footer>
 </main>
 </body>

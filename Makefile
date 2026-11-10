@@ -1,5 +1,5 @@
 .PHONY: install dev build start db-up db-down db-migrate db-seed db-setup check lint format typecheck \
-        test test-nodb test-unit coverage mutation mutation-sql report
+        test test-nodb test-unit coverage mutation mutation-sql report perf
 
 install:
 	npm ci
@@ -70,4 +70,12 @@ report:
 	npm run mutation
 	npm run mutation:di
 	npm run mutation:sql
+	npm run report
+
+# Навантажувальний тест на ~100 тис. записів (потрібен `make db-up`). Результат: reports/perf.json
+PERF_DATABASE_URL ?= postgres://cbt:cbt@localhost:5432/cbt_perf
+perf:
+	npm run build
+	PERF_DATABASE_URL=$(PERF_DATABASE_URL) npm run perf:prepare
+	PERF_DATABASE_URL=$(PERF_DATABASE_URL) npm run perf -- --budget-p99 50
 	npm run report

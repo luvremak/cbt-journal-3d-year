@@ -33,7 +33,9 @@
     "smoke": "node scripts/smoke.mjs",
     "start:staging": "node dist/db/migrate.js && node dist/db/seed.js && node dist/index.js",
     "test:di": "npm test -w @cbt-journal/di",
-    "mutation:di": "npm run mutation -w @cbt-journal/di"
+    "mutation:di": "npm run mutation -w @cbt-journal/di",
+    "perf:prepare": "tsx perf/prepare.ts",
+    "perf": "tsx perf/load.ts"
   },
   "simple-git-hooks": {
     "pre-commit": "npx lint-staged && npm run typecheck && npm run test:unit",
@@ -56,11 +58,13 @@
     "@fontsource/spectral": "^5.3.0",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1",
+    "@types/autocannon": "^7.12.7",
     "@types/express": "^5.0.6",
     "@types/node": "^22.20.5",
     "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^5.1.0",
+    "autocannon": "^9.0.0",
     "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
     "lint-staged": "^17.6.0",

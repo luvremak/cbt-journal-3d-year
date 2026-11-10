@@ -11,6 +11,9 @@ const schema = z
     DATABASE_URL: z.string().optional(),
     /** Назва оточення для /version: local, ci, staging. */
     APP_ENV: z.string().min(1).default('local'),
+    /** Кеш користувачів у пам'яті (perf): TTL у мс, 0 — вимкнено. */
+    USER_CACHE_TTL_MS: z.coerce.number().int().min(0).default(60_000),
+    USER_CACHE_MAX: z.coerce.number().int().positive().default(10_000),
     /** Коміт збірки для /version; на Render береться з RENDER_GIT_COMMIT. */
     GIT_COMMIT: z.string().min(1).default('unknown'),
   })

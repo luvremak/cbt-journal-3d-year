@@ -17,7 +17,18 @@ export interface MigrateOptions {
   dir?: string;
   /** Скільки міграція може чекати на блокування таблиці, поки працює стара версія. */
   lockTimeout?: string;
+  /** Скільки чекати, поки інший процес закінчить мігрувати (мс). */
+  lockWaitMs?: number;
+  /** Пауза між спробами взяти advisory lock (мс). */
+  lockPollMs?: number;
   log?: (message: string) => void;
+}
+
+export class MigrationLockTimeoutError extends Error {
+  constructor(waitedMs: number) {
+    super(`Another process has been migrating for over ${waitedMs} ms; giving up`);
+    this.name = 'MigrationLockTimeoutError';
+  }
 }
 
 export class MigrationChecksumError extends Error {
@@ -32,18 +43,31 @@ const checksum = (sql: string) => createHash('sha256').update(sql).digest('hex')
 /**
  * Застосовує migrations/*.sql за алфавітом. Правила міграцій без простою —
  * standards/migrations.md. Тут — механіка:
- * - advisory lock на весь прогін;
+ * - advisory lock на весь прогін. Чекаємо на нього в Node (pg_try_advisory_lock + пауза),
+ *   а не всередині SQL: інакше сесія, що «висить» у pg_advisory_lock, — це відкрита
+ *   транзакція, на яку чекає CREATE INDEX CONCURRENTLY іншого мігратора → deadlock;
  * - кожна міграція в окремій транзакції з lock_timeout (окрім позначених no-transaction);
  * - контрольна сума: змінену після застосування міграцію не можна тихо пропустити.
  */
 export async function migrate(pool: Pool, options: MigrateOptions = {}): Promise<string[]> {
   const dir = options.dir ?? DEFAULT_MIGRATIONS_DIR;
   const lockTimeout = options.lockTimeout ?? '5s';
+  const lockWaitMs = options.lockWaitMs ?? 10 * 60_000;
+  const lockPollMs = options.lockPollMs ?? 250;
   const log = options.log ?? (() => {});
 
   const client = await pool.connect();
   try {
-    await client.query('SELECT pg_advisory_lock(hashtext($1))', [LOCK_KEY]);
+    const started = Date.now();
+    for (;;) {
+      const { rows } = await client.query<{ locked: boolean }>(
+        'SELECT pg_try_advisory_lock(hashtext($1)) AS locked',
+        [LOCK_KEY],
+      );
+      if (rows[0]?.locked) break;
+      if (Date.now() - started >= lockWaitMs) throw new MigrationLockTimeoutError(lockWaitMs);
+      await new Promise((resolve) => setTimeout(resolve, lockPollMs));
+    }
     try {
       await client.query(`
         CREATE TABLE IF NOT EXISTS schema_migrations (

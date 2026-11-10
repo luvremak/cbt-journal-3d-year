@@ -6,7 +6,10 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import type { Pool } from '../../src/db/pool.js';
 import type { EntryRepository } from '../../src/modules/entries/entry.js';
 import { InMemoryEntryRepository } from '../../src/modules/entries/in-memory-entry-repository.js';
-import { PgEntryRepository } from '../../src/modules/entries/pg-entry-repository.js';
+import {
+  DEFERRED_JOIN_MIN_OFFSET,
+  PgEntryRepository,
+} from '../../src/modules/entries/pg-entry-repository.js';
 import { InMemoryNoteRepository } from '../../src/modules/notes/in-memory-note-repository.js';
 import type { NoteRepository } from '../../src/modules/notes/note.js';
 import { PgNoteRepository } from '../../src/modules/notes/pg-note-repository.js';
@@ -133,6 +136,28 @@ function contract(name: string, setup: Setup, skip = false) {
           (await r.entries.findByClient(SEED_IDS.clientIryna, opts(1))).map((e) => e.id),
         ).toEqual([SEED_IDS.entryIryna1]);
         expect(await r.entries.findByClient(SEED_IDS.clientIryna, opts(2))).toEqual([]);
+      });
+
+      it('deep pages (deferred join, offset >= 200) equal slices of the full list', async () => {
+        const created: string[] = [];
+        for (let i = 0; i < 260; i++) {
+          created.push((await r.entries.create({ ...newEntry, situation: `s${i}` })).id);
+        }
+        for (const id of created.filter((_, i) => i % 7 === 0)) await r.entries.softDelete(id);
+        for (const includeDeleted of [false, true]) {
+          const all = await r.entries.findByClient(SEED_IDS.clientMaksym, {
+            includeDeleted,
+            page: { limit: 1000, offset: 0 },
+          });
+          expect(all.length).toBe(includeDeleted ? 260 : 260 - 38);
+          for (const offset of [DEFERRED_JOIN_MIN_OFFSET - 1, DEFERRED_JOIN_MIN_OFFSET, 210, 250]) {
+            const page = await r.entries.findByClient(SEED_IDS.clientMaksym, {
+              includeDeleted,
+              page: { limit: 25, offset },
+            });
+            expect(page).toEqual(all.slice(offset, offset + 25));
+          }
+        }
       });
 
       it('softDelete: true once, then false; unknown → false', async () => {
