@@ -143,6 +143,17 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '${{ env.NODE_VERSION }}', cache: npm }
       - run: npm ci && npm run build
+      # Одноразова база раннера: вимикаємо очікування fsync. Інакше p99 записів міряє
+      # спільний диск раннера (стрибки до 135 мс при p50 5 мс), а не застосунок і запити.
+      # Див. perf/README.md, «Контроль у CI».
+      - name: Disable durability on the throwaway CI database
+        run: |
+          psql "$PERF_DATABASE_URL" -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+          psql "$PERF_DATABASE_URL" -tAc "SHOW synchronous_commit; SHOW fsync"
       - run: npm run perf:prepare
       # Бюджет — з spec (нефункціональні вимоги); див. perf/README.md.
       - run: npm run perf -- --duration 5 --repeat 3 --budget-p99 50
